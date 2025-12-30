@@ -9,7 +9,7 @@
 
 import { streamText } from 'ai';
 import { geminiFlash } from '@/lib/ai/provider';
-import { LEGO_GENERATION_SYSTEM_PROMPT } from '@/lib/ai/prompts';
+import { LEGO_GENERATION_SYSTEM_PROMPT, IMAGE_TO_LEGO_SYSTEM_PROMPT } from '@/lib/ai/prompts';
 import {
   checkRateLimit,
   getClientIP,
@@ -19,6 +19,7 @@ import {
   type APIErrorResponse,
   type GenerateRequestBody,
   VALIDATION_CONSTRAINTS,
+  SUPPORTED_IMAGE_TYPES,
 } from '@/lib/ai/types';
 
 /** Allow up to 60 seconds for AI generation (NFR1: <1 min) */
@@ -134,27 +135,63 @@ export async function POST(req: Request): Promise<Response> {
       return validationError;
     }
 
-    const { prompt, imageData } = body as GenerateRequestBody;
+    const { prompt, imageData, mimeType } = body as GenerateRequestBody;
     const trimmedPrompt = prompt.trim();
+
+    // Validate image data if provided
+    if (imageData) {
+      // Validate mimeType is provided and supported
+      if (!mimeType) {
+        return createErrorResponse(
+          'INVALID_INPUT',
+          'mimeType is required when imageData is provided',
+          400
+        );
+      }
+      if (!SUPPORTED_IMAGE_TYPES.includes(mimeType as typeof SUPPORTED_IMAGE_TYPES[number])) {
+        return createErrorResponse(
+          'INVALID_INPUT',
+          'Unsupported image type. Please use PNG, JPEG, WEBP, or HEIC.',
+          400
+        );
+      }
+      // Validate imageData size (max ~13.3MB base64 = 10MB raw)
+      const MAX_IMAGE_DATA_SIZE = 14 * 1024 * 1024; // ~14MB base64
+      if (imageData.length > MAX_IMAGE_DATA_SIZE) {
+        return createErrorResponse(
+          'INVALID_INPUT',
+          'Image too large. Please use an image smaller than 10MB.',
+          400
+        );
+      }
+    }
+
+    // Determine if this is image-based generation
+    const isImageGeneration = Boolean(imageData);
 
     // Build messages array for streamText
     // Supports both text-only and text+image inputs (AC #5)
-    const messages: Array<{ role: 'user'; content: Array<{ type: 'text'; text: string } | { type: 'image'; image: string }> }> = [
+    const messages: Array<{ role: 'user'; content: Array<{ type: 'text'; text: string } | { type: 'image'; image: string; mimeType?: string }> }> = [
       {
         role: 'user',
         content: imageData
           ? [
-              { type: 'image', image: imageData },
+              { type: 'image', image: imageData, ...(mimeType && { mimeType }) },
               { type: 'text', text: trimmedPrompt },
             ]
           : [{ type: 'text', text: trimmedPrompt }],
       },
     ];
 
+    // Use IMAGE_TO_LEGO prompt for image-based generation (Story 2.3)
+    const systemPrompt = isImageGeneration
+      ? IMAGE_TO_LEGO_SYSTEM_PROMPT
+      : LEGO_GENERATION_SYSTEM_PROMPT;
+
     // Generate with streaming using Vercel AI SDK
     const result = await streamText({
       model: geminiFlash,
-      system: LEGO_GENERATION_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages,
     });
 

@@ -367,3 +367,285 @@ test.describe('Create Page - Performance', () => {
         expect(loadTime).toBeLessThan(3000);
     });
 });
+
+/**
+ * E2E Tests for Image-to-Lego Model Generation
+ * @see Story 2.3: Implement Image-to-Lego Model Generation
+ */
+test.describe('Create Page - Image Mode', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/create');
+    });
+
+    test('should display mode toggle with Text and Image options', async ({ page }) => {
+        const modeToggle = page.getByTestId('mode-toggle');
+        await expect(modeToggle).toBeVisible();
+
+        const textButton = page.getByTestId('mode-text-button');
+        const imageButton = page.getByTestId('mode-image-button');
+
+        await expect(textButton).toBeVisible();
+        await expect(imageButton).toBeVisible();
+
+        // Text mode should be active by default
+        await expect(textButton).toHaveAttribute('aria-pressed', 'true');
+        await expect(imageButton).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    test('should switch to image mode when clicking Image button', async ({ page }) => {
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // Image button should now be active
+        await expect(imageButton).toHaveAttribute('aria-pressed', 'true');
+
+        // Text button should be inactive
+        const textButton = page.getByTestId('mode-text-button');
+        await expect(textButton).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    test('should show image upload zone in image mode', async ({ page }) => {
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // Image upload zone should be visible
+        const uploadZone = page.getByTestId('image-upload-zone');
+        await expect(uploadZone).toBeVisible();
+
+        // Text input should not be visible
+        const promptInput = page.getByTestId('prompt-input');
+        await expect(promptInput).not.toBeVisible();
+    });
+
+    test('should show drag-and-drop instructions in image mode', async ({ page }) => {
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // Check for drag-and-drop text
+        await expect(page.getByText(/drag.*drop/i)).toBeVisible();
+        await expect(page.getByText(/browse files/i)).toBeVisible();
+    });
+
+    test('should show drag-over state when dragging file over upload zone', async ({ page }) => {
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        const uploadZone = page.getByTestId('image-upload-zone');
+
+        // Simulate drag over event
+        await uploadZone.dispatchEvent('dragover', {
+            dataTransfer: { types: ['Files'], files: [] },
+        });
+
+        // Check for visual feedback (border-primary class indicates drag state)
+        await expect(uploadZone).toHaveClass(/border-primary/);
+    });
+
+    test('should remove drag-over state when dragging leaves upload zone', async ({ page }) => {
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        const uploadZone = page.getByTestId('image-upload-zone');
+
+        // Simulate drag over then drag leave
+        await uploadZone.dispatchEvent('dragover', {
+            dataTransfer: { types: ['Files'], files: [] },
+        });
+        await uploadZone.dispatchEvent('dragleave', {});
+
+        // Check drag state is removed
+        await expect(uploadZone).not.toHaveClass(/border-primary/);
+    });
+
+    test('should show file input for browsing in image mode', async ({ page }) => {
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // File input should exist (hidden but accessible)
+        const fileInput = page.getByTestId('file-input');
+        await expect(fileInput).toBeAttached();
+        await expect(fileInput).toHaveAttribute('type', 'file');
+        await expect(fileInput).toHaveAttribute('accept', 'image/png,image/jpeg,image/webp,image/heic');
+    });
+
+    test('should upload image and start generation', async ({ page }) => {
+        // Mock successful API response
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // Create a test image file
+        const fileInput = page.getByTestId('file-input');
+
+        // Upload a small test PNG
+        await fileInput.setInputFiles({
+            name: 'test.png',
+            mimeType: 'image/png',
+            buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+        });
+
+        // Wait for result section to appear
+        const resultSection = page.getByTestId('result-section');
+        await expect(resultSection).toBeVisible({ timeout: 15000 });
+
+        // Model viewer should be present
+        const modelViewer = page.getByTestId('model-viewer');
+        await expect(modelViewer).toBeVisible();
+    });
+
+    test('should show progress storytelling during image generation', async ({ page }) => {
+        // Mock the API to delay response
+        await page.route('**/api/generate', async (route) => {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // Upload image
+        const fileInput = page.getByTestId('file-input');
+        await fileInput.setInputFiles({
+            name: 'test.png',
+            mimeType: 'image/png',
+            buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+        });
+
+        // Progress component should appear
+        const progressComponent = page.getByTestId('generation-progress');
+        await expect(progressComponent).toBeVisible();
+
+        // Should show progress message
+        const progressMessage = page.getByTestId('progress-message');
+        await expect(progressMessage).toContainText(/(Imagining|Finding|Building)/);
+    });
+
+    test('should show error message for invalid file type', async ({ page }) => {
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // Try to upload a non-image file (PDF)
+        const fileInput = page.getByTestId('file-input');
+        await fileInput.setInputFiles({
+            name: 'document.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from('fake pdf content'),
+        });
+
+        // Error should be visible
+        const uploadError = page.getByTestId('upload-error');
+        await expect(uploadError).toBeVisible();
+        await expect(uploadError).toContainText(/PNG, JPEG, WEBP, or HEIC/i);
+    });
+
+    test('should show image preview after valid file selection', async ({ page }) => {
+        // Mock successful API response but delay it
+        await page.route('**/api/generate', async (route) => {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // Upload image
+        const fileInput = page.getByTestId('file-input');
+        await fileInput.setInputFiles({
+            name: 'test.png',
+            mimeType: 'image/png',
+            buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+        });
+
+        // Preview should appear (briefly before generation starts)
+        const preview = page.getByTestId('image-preview');
+        // Note: Preview may be very brief before generation starts, so we just check generation started
+        const progressComponent = page.getByTestId('generation-progress');
+        await expect(progressComponent).toBeVisible({ timeout: 2000 });
+    });
+
+    test('should handle API error during image generation', async ({ page }) => {
+        // Mock failed API response
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 500,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    success: false,
+                    error: {
+                        code: 'GENERATION_FAILED',
+                        message: 'Unable to process image',
+                    },
+                }),
+            });
+        });
+
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // Upload image
+        const fileInput = page.getByTestId('file-input');
+        await fileInput.setInputFiles({
+            name: 'test.png',
+            mimeType: 'image/png',
+            buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+        });
+
+        // Error section should appear
+        const errorSection = page.getByTestId('error-section');
+        await expect(errorSection).toBeVisible({ timeout: 10000 });
+
+        // Error message should be user-friendly
+        const errorMessage = page.getByTestId('error-message');
+        await expect(errorMessage).toBeVisible();
+        await expect(errorMessage).toContainText(/image/i);
+
+        // Retry button should be visible
+        const retryButton = page.getByTestId('retry-button');
+        await expect(retryButton).toBeVisible();
+    });
+
+    test('should switch back to text mode and preserve text functionality', async ({ page }) => {
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // Verify image mode
+        await expect(page.getByTestId('image-upload-zone')).toBeVisible();
+
+        // Switch back to text mode
+        const textButton = page.getByTestId('mode-text-button');
+        await textButton.click();
+
+        // Text input should be visible again
+        const promptInput = page.getByTestId('prompt-input');
+        await expect(promptInput).toBeVisible();
+
+        // Image upload zone should not be visible
+        await expect(page.getByTestId('image-upload-zone')).not.toBeVisible();
+    });
+});

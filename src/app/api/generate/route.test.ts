@@ -186,8 +186,8 @@ describe('/api/generate', () => {
 
     it('supports text + image input (AC #5)', async () => {
       const { streamText } = await import('ai');
-      const testImageData = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      const req = createRequest({ prompt: 'Build this', imageData: testImageData });
+      const testImageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const req = createRequest({ prompt: 'Build this', imageData: testImageData, mimeType: 'image/png' });
       await POST(req);
 
       expect(streamText).toHaveBeenCalledWith(
@@ -196,11 +196,75 @@ describe('/api/generate', () => {
             {
               role: 'user',
               content: [
-                { type: 'image', image: testImageData },
+                { type: 'image', image: testImageData, mimeType: 'image/png' },
                 { type: 'text', text: 'Build this' },
               ],
             },
           ],
+        })
+      );
+    });
+
+    it('rejects image without mimeType', async () => {
+      const testImageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const req = createRequest({ prompt: 'Build this', imageData: testImageData });
+      const response = await POST(req);
+
+      expect(response.status).toBe(400);
+      const data = await response.json();
+      expect(data.error.code).toBe('INVALID_INPUT');
+      expect(data.error.message).toContain('mimeType');
+    });
+
+    it('rejects unsupported mimeType', async () => {
+      const testImageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const req = createRequest({ prompt: 'Build this', imageData: testImageData, mimeType: 'image/bmp' });
+      const response = await POST(req);
+
+      expect(response.status).toBe(400);
+      const data = await response.json();
+      expect(data.error.code).toBe('INVALID_INPUT');
+      expect(data.error.message).toContain('Unsupported image type');
+    });
+
+    it('supports image input with mimeType (Story 2.3)', async () => {
+      const { streamText } = await import('ai');
+      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const req = createRequest({
+        prompt: 'Create a Lego model based on this image.',
+        imageData: testImageBase64,
+        mimeType: 'image/png',
+      });
+      await POST(req);
+
+      expect(streamText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [
+            {
+              role: 'user',
+              content: expect.arrayContaining([
+                expect.objectContaining({ type: 'image' }),
+                expect.objectContaining({ type: 'text' }),
+              ]),
+            },
+          ],
+        })
+      );
+    });
+
+    it('uses IMAGE_TO_LEGO system prompt when image is provided (Story 2.3)', async () => {
+      const { streamText } = await import('ai');
+      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const req = createRequest({
+        prompt: 'Build this',
+        imageData: testImageBase64,
+        mimeType: 'image/jpeg',
+      });
+      await POST(req);
+
+      expect(streamText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          system: expect.stringContaining('image'),
         })
       );
     });

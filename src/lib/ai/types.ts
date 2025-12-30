@@ -23,12 +23,27 @@ export interface APIErrorResponse {
 }
 
 /**
+ * Supported image MIME types for image-to-Lego generation.
+ */
+export const SUPPORTED_IMAGE_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/heic',
+] as const;
+
+export type SupportedImageType = (typeof SUPPORTED_IMAGE_TYPES)[number];
+
+/**
  * Request body for the /api/generate endpoint.
  */
 export interface GenerateRequestBody {
+  /** Text prompt describing what to build (required for text mode, optional for image mode) */
   prompt: string;
-  /** Optional: image data as base64 string (for future image-to-model) */
+  /** Optional: image data as base64 string (for image-to-model) */
   imageData?: string;
+  /** Optional: MIME type of the image (required when imageData is provided) */
+  mimeType?: SupportedImageType;
 }
 
 /**

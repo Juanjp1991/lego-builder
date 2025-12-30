@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { LEGO_GENERATION_SYSTEM_PROMPT, FIRST_BUILD_SUFFIX } from './prompts';
+import { LEGO_GENERATION_SYSTEM_PROMPT, FIRST_BUILD_SUFFIX, IMAGE_TO_LEGO_SYSTEM_PROMPT } from './prompts';
 
 describe('AI Prompts', () => {
   describe('LEGO_GENERATION_SYSTEM_PROMPT', () => {
@@ -53,6 +53,41 @@ describe('AI Prompts', () => {
 
     it('emphasizes simplicity', () => {
       expect(FIRST_BUILD_SUFFIX.toLowerCase()).toContain('simple');
+    });
+  });
+
+  describe('IMAGE_TO_LEGO_SYSTEM_PROMPT', () => {
+    it('is defined and non-empty', () => {
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toBeDefined();
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT.length).toBeGreaterThan(0);
+    });
+
+    it('mentions image analysis', () => {
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT.toLowerCase()).toContain('image');
+    });
+
+    it('contains analysis instructions', () => {
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('ANALYSIS INSTRUCTIONS');
+    });
+
+    it('contains HTML doctype declaration', () => {
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('<!DOCTYPE html>');
+    });
+
+    it('contains Three.js importmap', () => {
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('importmap');
+    });
+
+    it('defines the addBrick helper function', () => {
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('function addBrick');
+    });
+
+    it('instructs to keep design simple', () => {
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('15-50 bricks');
+    });
+
+    it('mentions LEGO Master Builder', () => {
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('LEGO Master Builder');
     });
   });
 });
