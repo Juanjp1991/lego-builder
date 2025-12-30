@@ -1,0 +1,117 @@
+# generated: 2025-12-30
+# project: Lego Builder
+# project_key: lego-builder
+# tracking_system: file-system
+# story_location: /home/juan/Desktop/DEV/Lego builder/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2025-12-30
+project: Lego Builder
+project_key: lego-builder
+tracking_system: file-system
+story_location: "_bmad-output/implementation-artifacts"
+
+development_status:
+  # Epic 1: Project Foundation & Core Infrastructure (5 stories)
+  # Users/developers have a working PWA foundation with 3D viewer, testing infrastructure, AI integration, and error handling ready
+  epic-1: in-progress
+  1-1-initialize-nextjs-project-with-pwa-support: done
+  1-2-configure-testing-infrastructure: done
+  1-3-implement-3d-model-viewer-component: done
+  1-4-add-loading-states-and-progress-storytelling: ready-for-dev
+  1-5-configure-posthog-analytics: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: AI-Powered Model Generation (6 stories)
+  # Users can transform text prompts or images into 3D Lego models with retry, structural feedback, and proper error handling
+  epic-2: backlog
+  2-1-create-gemini-api-proxy-route: backlog
+  2-2-implement-text-to-lego-model-generation: backlog
+  2-3-implement-image-to-lego-model-generation: backlog
+  2-4-add-free-retry-mechanism: backlog
+  2-5-implement-first-build-guarantee: backlog
+  2-6-add-structural-feedback-for-generated-models: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Brick Inventory Scanning (5 stories)
+  # Users can photograph bricks to create/update their collection inventory with persistent storage
+  epic-3: backlog
+  3-1-implement-camera-permission-flow: backlog
+  3-2-create-brick-scanning-api-route: backlog
+  3-3-implement-brick-scanning-ui: backlog
+  3-4-display-and-edit-brick-inventory: backlog
+  3-5-persist-inventory-with-indexeddb: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Inventory-Aware Generation & Scale-Down (3 stories)
+  # Users see what's buildable NOW and can scale down when bricks are missing
+  epic-4: backlog
+  4-1-implement-quick-start-mode: backlog
+  4-2-display-missing-brick-count-before-build: backlog
+  4-3-implement-scale-down-option: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: First-Time User Onboarding (3 stories)
+  # New users get a guided first experience leading to their first successful build
+  epic-5: backlog
+  5-1-create-onboarding-welcome-flow: backlog
+  5-2-implement-skip-onboarding-option: backlog
+  5-3-guide-first-scan-and-generation: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Layer-by-Layer Build Instructions (5 stories)
+  # Users can follow step-by-step visual instructions to complete their build
+  epic-6: backlog
+  6-1-implement-layer-by-layer-instruction-view: backlog
+  6-2-add-step-navigation-controls: backlog
+  6-3-display-current-brick-requirements: backlog
+  6-4-show-build-progress-indicator: backlog
+  6-5-add-missing-brick-alerts-during-build: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Build Progress & Completion (6 stories)
+  # Users can save progress, resume builds, name creations, view gallery, celebrate completion
+  epic-7: backlog
+  7-1-save-in-progress-build: backlog
+  7-2-resume-saved-build: backlog
+  7-3-name-completed-creations: backlog
+  7-4-view-completed-builds-gallery: backlog
+  7-5-celebration-on-build-completion: backlog
+  7-6-enable-offline-access-to-saved-builds: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: Template Discovery & Browsing (3 stories)
+  # Users can browse template categories and find inspiration when uncertain what to build
+  epic-8: backlog
+  8-1-create-template-categories-page: backlog
+  8-2-display-template-cards-with-inventory-match: backlog
+  8-3-build-template-scaled-to-inventory: backlog
+  epic-8-retrospective: optional
