@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { ModelViewer } from '@/components/viewer/ModelViewer';
 
 /**
@@ -72,12 +73,20 @@ export default function Home() {
     `;
 
   return (
-    <main className="min-h-screen bg-background p-4 md:p-8">
+    <main className="min-h-screen bg-background p-4 md:p-8 pb-24">
       <div className="max-w-4xl mx-auto space-y-8">
         <header className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight text-primary">
-            Lego Builder <span className="text-muted-foreground text-2xl font-light">MVP</span>
-          </h1>
+          <nav className="flex items-center justify-between mb-4">
+            <h1 className="text-4xl font-bold tracking-tight text-primary">
+              Lego Builder <span className="text-muted-foreground text-2xl font-light">MVP</span>
+            </h1>
+            <Link
+              href="/create"
+              className="px-4 py-2 rounded-lg font-semibold text-sm bg-[#FFB800] hover:bg-[#E6A600] text-black transition-colors"
+            >
+              Create
+            </Link>
+          </nav>
           <p className="text-muted-foreground italic">
             Visualizing your creative brick constructions in 3D.
           </p>
@@ -91,9 +100,30 @@ export default function Home() {
         </section>
 
         <footer className="text-sm text-muted-foreground border-t pt-4">
-          <p>© 2025 Lego Builder Project • Story 1.3 Verified</p>
+          <p>© 2025 Lego Builder Project • Story 2.2 Verified</p>
         </footer>
       </div>
+
+      {/* Floating Action Button - Create */}
+      <Link
+        href="/create"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#FFB800] hover:bg-[#E6A600] text-black shadow-lg flex items-center justify-center transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FFB800]"
+        aria-label="Create new design"
+        data-testid="fab-create"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2.5}
+          stroke="currentColor"
+          className="w-6 h-6"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+      </Link>
     </main>
   );
 }
+

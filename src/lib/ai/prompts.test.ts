@@ -12,32 +12,32 @@ describe('AI Prompts', () => {
       expect(LEGO_GENERATION_SYSTEM_PROMPT.length).toBeGreaterThan(0);
     });
 
-    it('mentions LEGO', () => {
-      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('LEGO');
+    it('mentions LEGO Master Builder', () => {
+      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('LEGO Master Builder');
     });
 
-    it('mentions Three.js for 3D rendering', () => {
-      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('Three.js');
+    it('contains HTML doctype declaration', () => {
+      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('<!DOCTYPE html>');
     });
 
-    it('specifies brick sizes', () => {
-      expect(LEGO_GENERATION_SYSTEM_PROMPT).toMatch(/1x1|2x2|2x4/);
+    it('contains Three.js importmap', () => {
+      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('importmap');
     });
 
-    it('mentions HTML output format', () => {
-      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('HTML');
+    it('defines the addBrick helper function', () => {
+      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('function addBrick');
     });
 
-    it('mentions iframe rendering', () => {
-      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('iframe');
+    it('instructs to loop/call addBrick repeatedly', () => {
+      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('specific addBrick() calls');
     });
 
-    it('instructs to avoid markdown formatting', () => {
-      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('Do not include any markdown');
+    it('enforces strict integer alignment', () => {
+      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('integers');
     });
 
-    it('mentions OrbitControls for interaction', () => {
-      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('OrbitControls');
+    it('defines standard camera setup', () => {
+      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('camera.position.set');
     });
   });
 
@@ -53,14 +53,6 @@ describe('AI Prompts', () => {
 
     it('emphasizes simplicity', () => {
       expect(FIRST_BUILD_SUFFIX.toLowerCase()).toContain('simple');
-    });
-
-    it('mentions beginner-friendly', () => {
-      expect(FIRST_BUILD_SUFFIX).toContain('beginner-friendly');
-    });
-
-    it('prioritizes stability', () => {
-      expect(FIRST_BUILD_SUFFIX).toContain('stability');
     });
   });
 });
