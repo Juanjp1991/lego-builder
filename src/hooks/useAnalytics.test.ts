@@ -12,6 +12,7 @@ describe('useAnalytics', () => {
     const mockPostHog = {
         capture: vi.fn(),
         reset: vi.fn(),
+        identify: vi.fn(),
     };
 
     beforeEach(() => {
@@ -42,6 +43,14 @@ describe('useAnalytics', () => {
         result.current.reset();
 
         expect(mockPostHog.reset).toHaveBeenCalled();
+    });
+
+    it('identifies user', () => {
+        const { result } = renderHook(() => useAnalytics());
+
+        result.current.identify('user-123');
+
+        expect(mockPostHog.identify).toHaveBeenCalledWith('user-123');
     });
 
     it('handles missing posthog gracefully', () => {

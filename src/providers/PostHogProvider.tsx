@@ -4,11 +4,20 @@ import posthog from 'posthog-js';
 import { PostHogProvider as PHProvider } from 'posthog-js/react';
 import { useEffect } from 'react';
 
+const DEFAULT_POSTHOG_HOST = 'https://app.posthog.com';
+
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
-        if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+        if (typeof window !== 'undefined') {
+            if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn('[PostHog] NEXT_PUBLIC_POSTHOG_KEY is missing. Analytics will be disabled.');
+                }
+                return;
+            }
+
             posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
-                api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://app.posthog.com',
+                api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || DEFAULT_POSTHOG_HOST,
                 capture_pageview: true,
                 capture_pageleave: true,
                 // Privacy settings

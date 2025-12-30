@@ -29,5 +29,15 @@ export function useAnalytics() {
         }
     };
 
-    return { trackEvent, reset };
+    /**
+     * Identifies a user with a distinct ID
+     * @param distinctId The unique ID to associate with the current user
+     */
+    const identify = (distinctId: string) => {
+        if (posthog) {
+            posthog.identify(distinctId);
+        }
+    };
+
+    return { trackEvent, reset, identify };
 }

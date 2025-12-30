@@ -9,6 +9,9 @@ export type AnalyticsEventName =
 export interface ScanEventProperties {
     source: 'camera' | 'upload';
     brick_count?: number;
+    success: boolean;
+    duration_ms?: number;
+    error?: string;
 }
 
 export interface GenerateEventProperties {
@@ -22,13 +25,16 @@ export interface BuildEventProperties {
     model_id: string;
     steps_completed?: number;
     total_steps?: number;
+    success: boolean;
+    duration_ms?: number;
+    error?: string;
 }
 
 export type AnalyticsEventProperties = {
-    scan_started: ScanEventProperties;
-    scan_completed: ScanEventProperties & { success: boolean };
-    generate_started: GenerateEventProperties;
+    scan_started: Pick<ScanEventProperties, 'source'>;
+    scan_completed: ScanEventProperties;
+    generate_started: Pick<GenerateEventProperties, 'input_type'>;
     generate_completed: GenerateEventProperties;
-    build_started: BuildEventProperties;
-    build_completed: BuildEventProperties & { success: boolean };
+    build_started: Pick<BuildEventProperties, 'model_id'>;
+    build_completed: BuildEventProperties;
 };
