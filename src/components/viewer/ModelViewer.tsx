@@ -22,8 +22,13 @@ export function ModelViewer({
     className,
 }: ViewerProps) {
     const [state, setState] = useState<ViewerState>('loading');
+    const [hasMounted, setHasMounted] = useState(false);
     const [key, setKey] = useState(0); // Used to force iframe reload on retry
     const iframeRef = useRef<HTMLIFrameElement>(null);
+
+    useEffect(() => {
+        setHasMounted(true);
+    }, []);
 
     // Communicate with iframe
     const handleControlMessage = useCallback((action: ControlAction) => {
@@ -80,8 +85,8 @@ export function ModelViewer({
             data-testid="model-viewer"
         >
             <div className="relative w-full aspect-video bg-muted rounded-lg overflow-hidden border border-border">
-                {/* Loading skeleton */}
-                {state === 'loading' && (
+                {/* Always show skeleton if not mounted or loading */}
+                {(!hasMounted || state === 'loading') && (
                     <div
                         className="absolute inset-0 animate-pulse bg-muted z-10"
                         data-testid="viewer-skeleton"
@@ -95,27 +100,29 @@ export function ModelViewer({
                         className="h-full w-full"
                     />
                 ) : (
-                    <iframe
-                        key={key}
-                        ref={iframeRef}
-                        title="3D Lego Model Viewer"
-                        srcDoc={htmlScene}
-                        className={cn(
-                            'w-full h-full border-0',
-                            state === 'loading' && 'invisible'
-                        )}
-                        onLoad={handleLoad}
-                        onError={handleError}
-                        sandbox="allow-scripts"
-                        data-testid="viewer-iframe"
-                    />
+                    hasMounted && (
+                        <iframe
+                            key={key}
+                            ref={iframeRef}
+                            title="3D Lego Model Viewer"
+                            srcDoc={htmlScene}
+                            className={cn(
+                                'w-full h-full border-0',
+                                state === 'loading' && 'invisible'
+                            )}
+                            onLoad={handleLoad}
+                            onError={handleError}
+                            sandbox="allow-scripts allow-same-origin"
+                            data-testid="viewer-iframe"
+                        />
+                    )
                 )}
             </div>
 
             {/* Viewer Controls - Connected via onControlMessage */}
             <ViewerControls
                 onControlMessage={handleControlMessage}
-                className={cn(state !== 'ready' && 'opacity-50 pointer-events-none')}
+                className={cn((!hasMounted || state !== 'ready') && 'opacity-50 pointer-events-none')}
             />
         </div>
     );
