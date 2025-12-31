@@ -43,7 +43,7 @@ export interface UseTextToModelReturn {
     /** Error code for programmatic handling */
     errorCode: string | null;
     /** Start generation from prompt */
-    generate: (prompt: string) => Promise<void>;
+    generate: (prompt: string, isFirstBuild?: boolean) => Promise<void>;
     /** Reset to idle state (clears retry count) */
     reset: () => void;
     /** Generation duration in ms (for NFR1 tracking) */
@@ -90,8 +90,9 @@ export function useTextToModel(): UseTextToModelReturn {
     const phaseTimersRef = useRef<NodeJS.Timeout[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
     const startTimeRef = useRef<number | null>(null);
-    // Store last prompt for retry capability
+    // Store last prompt and first-build state for retry capability
     const lastPromptRef = useRef<string | null>(null);
+    const lastIsFirstBuildRef = useRef<boolean>(false);
 
     /**
      * Cleanup on unmount - abort any pending requests and clear timers
@@ -150,7 +151,7 @@ export function useTextToModel(): UseTextToModelReturn {
     /**
      * Internal generate function that handles both new prompts and retries
      */
-    const generateInternal = useCallback(async (prompt: string, isRetry: boolean): Promise<void> => {
+    const generateInternal = useCallback(async (prompt: string, isFirstBuild: boolean, isRetry: boolean): Promise<void> => {
         // Cancel any in-progress generation
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -160,6 +161,7 @@ export function useTextToModel(): UseTextToModelReturn {
         if (!isRetry) {
             setRetryCount(0);
             lastPromptRef.current = prompt;
+            lastIsFirstBuildRef.current = isFirstBuild;
         } else {
             // For retries, increment the count
             setRetryCount((prev) => prev + 1);
@@ -184,7 +186,7 @@ export function useTextToModel(): UseTextToModelReturn {
             const response = await fetch('/api/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt }),
+                body: JSON.stringify({ prompt, isFirstBuild }),
                 signal: abortControllerRef.current.signal,
             });
 
@@ -257,9 +259,11 @@ export function useTextToModel(): UseTextToModelReturn {
     /**
      * Generate model from text prompt (public API)
      * Resets retry count for new prompts
+     * @param prompt - Text description of what to build
+     * @param isFirstBuild - Whether to use simple mode (First-Build Guarantee)
      */
-    const generate = useCallback(async (prompt: string): Promise<void> => {
-        await generateInternal(prompt, false);
+    const generate = useCallback(async (prompt: string, isFirstBuild: boolean = false): Promise<void> => {
+        await generateInternal(prompt, isFirstBuild, false);
     }, [generateInternal]);
 
     /**
@@ -268,7 +272,7 @@ export function useTextToModel(): UseTextToModelReturn {
      */
     const retry = useCallback(() => {
         if (lastPromptRef.current && retryCount < MAX_RETRIES) {
-            generateInternal(lastPromptRef.current, true);
+            generateInternal(lastPromptRef.current, lastIsFirstBuildRef.current, true);
         }
     }, [generateInternal, retryCount]);
 

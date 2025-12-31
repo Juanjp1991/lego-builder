@@ -126,7 +126,7 @@ describe('useTextToModel', () => {
             expect(mockFetch).toHaveBeenCalledWith('/api/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: 'dragon' }),
+                body: JSON.stringify({ prompt: 'dragon', isFirstBuild: false }),
                 signal: expect.any(AbortSignal),
             });
         });
@@ -436,7 +436,7 @@ describe('useTextToModel', () => {
             });
 
             expect(mockFetch).toHaveBeenCalledWith('/api/generate', expect.objectContaining({
-                body: JSON.stringify({ prompt: 'my dragon' }),
+                body: JSON.stringify({ prompt: 'my dragon', isFirstBuild: false }),
             }));
         });
 

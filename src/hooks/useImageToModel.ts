@@ -48,7 +48,7 @@ export interface UseImageToModelReturn {
     /** Error code for programmatic handling */
     errorCode: string | null;
     /** Start generation from image file */
-    generate: (file: File) => Promise<void>;
+    generate: (file: File, isFirstBuild?: boolean) => Promise<void>;
     /** Reset to idle state (clears retry count) */
     reset: () => void;
     /** Generation duration in ms (for NFR1 tracking) */
@@ -116,8 +116,9 @@ export function useImageToModel(): UseImageToModelReturn {
     const phaseTimersRef = useRef<NodeJS.Timeout[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
     const startTimeRef = useRef<number | null>(null);
-    // Store last file data for retry capability
+    // Store last file data and first-build state for retry capability
     const lastFileDataRef = useRef<{ file: File; base64: string; mimeType: string } | null>(null);
+    const lastIsFirstBuildRef = useRef<boolean>(false);
 
     /**
      * Cleanup on unmount - abort any pending requests and clear timers
@@ -176,7 +177,7 @@ export function useImageToModel(): UseImageToModelReturn {
     /**
      * Internal generate function that handles both new files and retries
      */
-    const generateInternal = useCallback(async (file: File, isRetry: boolean): Promise<void> => {
+    const generateInternal = useCallback(async (file: File, isFirstBuild: boolean, isRetry: boolean): Promise<void> => {
         // Cancel any in-progress generation
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -215,6 +216,7 @@ export function useImageToModel(): UseImageToModelReturn {
                 // Reset retry count and store file data
                 setRetryCount(0);
                 lastFileDataRef.current = { file, base64: imageData, mimeType };
+                lastIsFirstBuildRef.current = isFirstBuild;
             }
 
             const response = await fetch('/api/generate', {
@@ -224,6 +226,7 @@ export function useImageToModel(): UseImageToModelReturn {
                     prompt: DEFAULT_IMAGE_PROMPT,
                     imageData,
                     mimeType,
+                    isFirstBuild,
                 }),
                 signal: abortControllerRef.current.signal,
             });
@@ -296,9 +299,11 @@ export function useImageToModel(): UseImageToModelReturn {
     /**
      * Generate model from image file (public API)
      * Resets retry count for new files
+     * @param file - Image file to analyze
+     * @param isFirstBuild - Whether to use simple mode (First-Build Guarantee)
      */
-    const generate = useCallback(async (file: File): Promise<void> => {
-        await generateInternal(file, false);
+    const generate = useCallback(async (file: File, isFirstBuild: boolean = false): Promise<void> => {
+        await generateInternal(file, isFirstBuild, false);
     }, [generateInternal]);
 
     /**
@@ -307,7 +312,7 @@ export function useImageToModel(): UseImageToModelReturn {
      */
     const retry = useCallback(() => {
         if (lastFileDataRef.current && retryCount < MAX_RETRIES) {
-            generateInternal(lastFileDataRef.current.file, true);
+            generateInternal(lastFileDataRef.current.file, lastIsFirstBuildRef.current, true);
         }
     }, [generateInternal, retryCount]);
 

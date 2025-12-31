@@ -1,9 +1,11 @@
-/**
- * Unit tests for the AI prompts module.
- */
-
 import { describe, it, expect } from 'vitest';
-import { LEGO_GENERATION_SYSTEM_PROMPT, FIRST_BUILD_SUFFIX, IMAGE_TO_LEGO_SYSTEM_PROMPT } from './prompts';
+import {
+  LEGO_GENERATION_SYSTEM_PROMPT,
+  FIRST_BUILD_SUFFIX,
+  IMAGE_TO_LEGO_SYSTEM_PROMPT,
+  getSystemPrompt,
+  getImageSystemPrompt,
+} from './prompts';
 
 describe('AI Prompts', () => {
   describe('LEGO_GENERATION_SYSTEM_PROMPT', () => {
@@ -88,6 +90,64 @@ describe('AI Prompts', () => {
 
     it('mentions LEGO Master Builder', () => {
       expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('LEGO Master Builder');
+    });
+  });
+
+  describe('getSystemPrompt', () => {
+    it('returns standard prompt when isFirstBuild is false', () => {
+      const prompt = getSystemPrompt(false);
+      expect(prompt).toBe(LEGO_GENERATION_SYSTEM_PROMPT);
+    });
+
+    it('returns prompt with FIRST_BUILD_SUFFIX when isFirstBuild is true', () => {
+      const prompt = getSystemPrompt(true);
+      expect(prompt).toContain(LEGO_GENERATION_SYSTEM_PROMPT);
+      expect(prompt).toContain(FIRST_BUILD_SUFFIX);
+    });
+
+    it('first-build prompt is longer than standard prompt', () => {
+      const standardPrompt = getSystemPrompt(false);
+      const firstBuildPrompt = getSystemPrompt(true);
+      expect(firstBuildPrompt.length).toBeGreaterThan(standardPrompt.length);
+    });
+
+    it('first-build prompt mentions simplicity', () => {
+      const prompt = getSystemPrompt(true);
+      expect(prompt.toLowerCase()).toContain('simple');
+    });
+
+    it('first-build prompt mentions brick limit', () => {
+      const prompt = getSystemPrompt(true);
+      expect(prompt).toContain('50 bricks');
+    });
+  });
+
+  describe('getImageSystemPrompt', () => {
+    it('returns standard image prompt when isFirstBuild is false', () => {
+      const prompt = getImageSystemPrompt(false);
+      expect(prompt).toBe(IMAGE_TO_LEGO_SYSTEM_PROMPT);
+    });
+
+    it('returns prompt with FIRST_BUILD_SUFFIX when isFirstBuild is true', () => {
+      const prompt = getImageSystemPrompt(true);
+      expect(prompt).toContain(IMAGE_TO_LEGO_SYSTEM_PROMPT);
+      expect(prompt).toContain(FIRST_BUILD_SUFFIX);
+    });
+
+    it('first-build prompt is longer than standard prompt', () => {
+      const standardPrompt = getImageSystemPrompt(false);
+      const firstBuildPrompt = getImageSystemPrompt(true);
+      expect(firstBuildPrompt.length).toBeGreaterThan(standardPrompt.length);
+    });
+
+    it('first-build prompt mentions simplicity', () => {
+      const prompt = getImageSystemPrompt(true);
+      expect(prompt.toLowerCase()).toContain('simple');
+    });
+
+    it('first-build prompt mentions brick limit', () => {
+      const prompt = getImageSystemPrompt(true);
+      expect(prompt).toContain('50 bricks');
     });
   });
 });

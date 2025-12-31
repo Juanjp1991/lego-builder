@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import { useTextToModel } from '@/hooks/useTextToModel';
 import { useImageToModel } from '@/hooks/useImageToModel';
+import { useFirstBuild } from '@/hooks/useFirstBuild';
 import { PromptInput } from '@/components/create/PromptInput';
 import { ImageUpload } from '@/components/create/ImageUpload';
 import { GenerationProgress } from '@/components/create/GenerationProgress';
 import { RetryButton } from '@/components/create/RetryButton';
 import { TemplateSuggestions } from '@/components/create/TemplateSuggestions';
+import { FirstBuildBadge } from '@/components/create/FirstBuildBadge';
+import { AdvancedModeToggle } from '@/components/create/AdvancedModeToggle';
 import { ModelViewer } from '@/components/viewer/ModelViewer';
 import { cn } from '@/lib/utils';
 import { MAX_RETRIES } from '@/lib/constants';
@@ -39,6 +42,15 @@ export function CreateContent() {
     // Image-to-model generation state
     const imageGeneration = useImageToModel();
 
+    // First-build guarantee state
+    const {
+        isLoading: isFirstBuildLoading,
+        isFirstBuildMode,
+        hasCompletedFirstBuild,
+        prefersAdvanced,
+        toggleAdvanced,
+    } = useFirstBuild();
+
     // Get active generation state based on mode
     const activeGeneration = mode === 'text' ? textGeneration : imageGeneration;
 
@@ -64,14 +76,14 @@ export function CreateContent() {
      * Handle text prompt submission
      */
     const handleTextSubmit = async (prompt: string) => {
-        await textGeneration.generate(prompt);
+        await textGeneration.generate(prompt, isFirstBuildMode);
     };
 
     /**
      * Handle image selection
      */
     const handleImageSelect = async (file: File) => {
-        await imageGeneration.generate(file);
+        await imageGeneration.generate(file, isFirstBuildMode);
     };
 
     /**
@@ -95,7 +107,7 @@ export function CreateContent() {
     const handleTemplateSelect = async (prompt: string) => {
         setMode('text'); // Switch to text mode first
         reset(); // Reset to clear retry count
-        await textGeneration.generate(prompt); // Generate with template prompt
+        await textGeneration.generate(prompt, isFirstBuildMode); // Generate with template prompt
     };
 
     /**
@@ -112,7 +124,20 @@ export function CreateContent() {
         <div className="space-y-8" data-testid="create-content">
             {/* Mode Toggle - Only shown when idle */}
             {isIdle && (
-                <div className="flex justify-center" data-testid="mode-toggle">
+                <div className="flex flex-col items-center gap-4" data-testid="mode-toggle">
+                    {/* First-Build Badge - Shown when in simple mode */}
+                    {isFirstBuildMode && !isFirstBuildLoading && (
+                        <FirstBuildBadge />
+                    )}
+
+                    {/* Advanced Mode Toggle - Shown for first-time users */}
+                    {!hasCompletedFirstBuild && !isFirstBuildLoading && (
+                        <AdvancedModeToggle
+                            checked={prefersAdvanced}
+                            onCheckedChange={toggleAdvanced}
+                        />
+                    )}
+
                     <div className="inline-flex rounded-lg border border-border p-1 bg-muted/30">
                         <button
                             type="button"

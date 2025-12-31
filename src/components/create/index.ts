@@ -5,3 +5,5 @@ export { RetryButton } from './RetryButton';
 export type { RetryButtonProps } from './RetryButton';
 export { TemplateSuggestions, TEMPLATE_SUGGESTIONS } from './TemplateSuggestions';
 export type { TemplateSuggestionsProps, TemplateSuggestion } from './TemplateSuggestions';
+export { FirstBuildBadge } from './FirstBuildBadge';
+export { AdvancedModeToggle } from './AdvancedModeToggle';

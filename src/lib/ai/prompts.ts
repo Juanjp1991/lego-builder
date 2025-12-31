@@ -490,3 +490,39 @@ YOUR TASK:
 8. OPTIMIZE: Use the largest standard bricks possible (2x4, 2x6) to minimize part count
 9. Keep it simple - capture the essence, not every detail
 `;
+
+/**
+ * Returns the appropriate system prompt for text-to-LEGO generation.
+ *
+ * When isFirstBuild is true, the FIRST_BUILD_SUFFIX is appended to encourage
+ * simpler, more buildable designs for first-time users.
+ *
+ * @param isFirstBuild - Whether this is the user's first build (simple mode)
+ * @returns The complete system prompt string
+ *
+ * @see Story 2.5: Implement First-Build Guarantee
+ */
+export function getSystemPrompt(isFirstBuild: boolean): string {
+  if (isFirstBuild) {
+    return LEGO_GENERATION_SYSTEM_PROMPT + '\n\n' + FIRST_BUILD_SUFFIX;
+  }
+  return LEGO_GENERATION_SYSTEM_PROMPT;
+}
+
+/**
+ * Returns the appropriate system prompt for image-to-LEGO generation.
+ *
+ * When isFirstBuild is true, the FIRST_BUILD_SUFFIX is appended to encourage
+ * simpler, more buildable designs for first-time users.
+ *
+ * @param isFirstBuild - Whether this is the user's first build (simple mode)
+ * @returns The complete system prompt string
+ *
+ * @see Story 2.5: Implement First-Build Guarantee
+ */
+export function getImageSystemPrompt(isFirstBuild: boolean): string {
+  if (isFirstBuild) {
+    return IMAGE_TO_LEGO_SYSTEM_PROMPT + '\n\n' + FIRST_BUILD_SUFFIX;
+  }
+  return IMAGE_TO_LEGO_SYSTEM_PROMPT;
+}

@@ -9,7 +9,7 @@
 
 import { streamText } from 'ai';
 import { geminiFlash } from '@/lib/ai/provider';
-import { LEGO_GENERATION_SYSTEM_PROMPT, IMAGE_TO_LEGO_SYSTEM_PROMPT } from '@/lib/ai/prompts';
+import { getSystemPrompt, getImageSystemPrompt } from '@/lib/ai/prompts';
 import {
   checkRateLimit,
   getClientIP,
@@ -135,7 +135,7 @@ export async function POST(req: Request): Promise<Response> {
       return validationError;
     }
 
-    const { prompt, imageData, mimeType } = body as GenerateRequestBody;
+    const { prompt, imageData, mimeType, isFirstBuild = false } = body as GenerateRequestBody;
     const trimmedPrompt = prompt.trim();
 
     // Validate image data if provided
@@ -176,17 +176,18 @@ export async function POST(req: Request): Promise<Response> {
         role: 'user',
         content: imageData
           ? [
-              { type: 'image', image: imageData, ...(mimeType && { mimeType }) },
-              { type: 'text', text: trimmedPrompt },
-            ]
+            { type: 'image', image: imageData, ...(mimeType && { mimeType }) },
+            { type: 'text', text: trimmedPrompt },
+          ]
           : [{ type: 'text', text: trimmedPrompt }],
       },
     ];
 
-    // Use IMAGE_TO_LEGO prompt for image-based generation (Story 2.3)
+    // Use appropriate prompt based on generation type and first-build mode
+    // Story 2.5: First-Build Guarantee - use simpler prompts for first-time users
     const systemPrompt = isImageGeneration
-      ? IMAGE_TO_LEGO_SYSTEM_PROMPT
-      : LEGO_GENERATION_SYSTEM_PROMPT;
+      ? getImageSystemPrompt(isFirstBuild)
+      : getSystemPrompt(isFirstBuild);
 
     // Generate with streaming using Vercel AI SDK
     const result = await streamText({

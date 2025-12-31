@@ -268,6 +268,60 @@ describe('/api/generate', () => {
         })
       );
     });
+
+    it('uses simple prompt when isFirstBuild is true (Story 2.5)', async () => {
+      const { streamText } = await import('ai');
+      const req = createRequest({ prompt: 'A house', isFirstBuild: true });
+      await POST(req);
+
+      expect(streamText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          system: expect.stringContaining('50 bricks'),
+        })
+      );
+    });
+
+    it('uses standard prompt when isFirstBuild is false', async () => {
+      const { streamText } = await import('ai');
+      const req = createRequest({ prompt: 'A house', isFirstBuild: false });
+      await POST(req);
+
+      expect(streamText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          system: expect.not.stringContaining('50 bricks'),
+        })
+      );
+    });
+
+    it('defaults to standard prompt when isFirstBuild is not provided', async () => {
+      const { streamText } = await import('ai');
+      const req = createRequest({ prompt: 'A car' });
+      await POST(req);
+
+      expect(streamText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          system: expect.not.stringContaining('50 bricks'),
+        })
+      );
+    });
+
+    it('uses simple image prompt when isFirstBuild is true with image (Story 2.5)', async () => {
+      const { streamText } = await import('ai');
+      const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const req = createRequest({
+        prompt: 'Build this',
+        imageData: testImageBase64,
+        mimeType: 'image/png',
+        isFirstBuild: true,
+      });
+      await POST(req);
+
+      expect(streamText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          system: expect.stringContaining('50 bricks'),
+        })
+      );
+    });
   });
 
   describe('Rate Limiting', () => {

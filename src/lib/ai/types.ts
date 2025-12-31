@@ -44,7 +44,10 @@ export interface GenerateRequestBody {
   imageData?: string;
   /** Optional: MIME type of the image (required when imageData is provided) */
   mimeType?: SupportedImageType;
+  /** Optional: Whether this is a first-build (simple mode) generation. Default: false */
+  isFirstBuild?: boolean;
 }
+
 
 /**
  * Input validation constraints.

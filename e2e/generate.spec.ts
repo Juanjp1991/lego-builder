@@ -927,3 +927,174 @@ test.describe('Create Page - Retry Mechanism', () => {
         await expect(retryButton).toContainText('2 left');
     });
 });
+
+/**
+ * E2E Tests for First-Build Guarantee
+ * @see Story 2.5: Implement First-Build Guarantee
+ * @see FR6: System recommends simpler, proven-buildable designs for first-time users
+ */
+test.describe('Create Page - First-Build Guarantee', () => {
+    test.beforeEach(async ({ page }) => {
+        // Clear IndexedDB to reset first-build status
+        await page.goto('/create');
+        await page.evaluate(async () => {
+            const request = indexedDB.deleteDatabase('keyval-store');
+            await new Promise((resolve, reject) => {
+                request.onsuccess = resolve;
+                request.onerror = reject;
+            });
+        });
+        // Reload to pick up cleared state
+        await page.reload();
+    });
+
+    test('should show Simple Mode badge for first-time users', async ({ page }) => {
+        // Wait for first-build status to load
+        await page.waitForTimeout(500);
+
+        // Badge should be visible
+        const badge = page.getByTestId('first-build-badge');
+        await expect(badge).toBeVisible();
+        await expect(badge).toContainText('Simple Mode');
+    });
+
+    test('should show advanced mode toggle for first-time users', async ({ page }) => {
+        // Wait for first-build status to load
+        await page.waitForTimeout(500);
+
+        // Toggle container should be visible
+        const toggleContainer = page.getByTestId('advanced-mode-toggle-container');
+        await expect(toggleContainer).toBeVisible();
+
+        // Should show unchecked by default
+        const toggle = page.getByTestId('advanced-mode-switch');
+        await expect(toggle).toHaveAttribute('data-state', 'unchecked');
+
+        // Should show label
+        await expect(page.getByText('Show me advanced designs')).toBeVisible();
+    });
+
+    test('should hide Simple Mode badge when advanced toggle is enabled', async ({ page }) => {
+        // Wait for first-build status to load
+        await page.waitForTimeout(500);
+
+        // Badge should be visible initially
+        const badge = page.getByTestId('first-build-badge');
+        await expect(badge).toBeVisible();
+
+        // Enable advanced mode
+        const toggle = page.getByTestId('advanced-mode-switch');
+        await toggle.click();
+
+        // Badge should disappear
+        await expect(badge).not.toBeVisible();
+    });
+
+    test('should persist advanced preference across page reloads', async ({ page }) => {
+        // Wait for first-build status to load
+        await page.waitForTimeout(500);
+
+        // Enable advanced mode
+        const toggle = page.getByTestId('advanced-mode-switch');
+        await toggle.click();
+
+        // Verify badge is hidden
+        const badge = page.getByTestId('first-build-badge');
+        await expect(badge).not.toBeVisible();
+
+        // Reload page
+        await page.reload();
+        await page.waitForTimeout(500);
+
+        // Badge should still be hidden
+        await expect(badge).not.toBeVisible();
+
+        // Toggle should still be checked
+        await expect(toggle).toHaveAttribute('data-state', 'checked');
+    });
+
+    test('should include isFirstBuild in API request for first-time users', async ({ page }) => {
+        // Mock API and capture the request
+        let capturedRequest: { isFirstBuild?: boolean } | null = null;
+        await page.route('**/api/generate', async (route) => {
+            const request = route.request();
+            capturedRequest = JSON.parse(request.postData() || '{}');
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        // Wait for first-build status to load
+        await page.waitForTimeout(500);
+
+        // Generate with simple mode (badge should be visible)
+        const textarea = page.getByTestId('prompt-input');
+        const submitButton = page.getByTestId('submit-button');
+
+        await textarea.fill('dragon');
+        await submitButton.click();
+
+        // Wait for request to complete
+        await expect(page.getByTestId('result-section')).toBeVisible({ timeout: 10000 });
+
+        // Verify isFirstBuild was true
+        expect(capturedRequest).not.toBeNull();
+        expect(capturedRequest!.isFirstBuild).toBe(true);
+    });
+
+    test('should NOT include isFirstBuild when advanced mode is enabled', async ({ page }) => {
+        // Mock API and capture the request
+        let capturedRequest: { isFirstBuild?: boolean } | null = null;
+        await page.route('**/api/generate', async (route) => {
+            const request = route.request();
+            capturedRequest = JSON.parse(request.postData() || '{}');
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        // Wait for first-build status to load
+        await page.waitForTimeout(500);
+
+        // Enable advanced mode
+        const toggle = page.getByTestId('advanced-mode-switch');
+        await toggle.click();
+
+        // Generate
+        const textarea = page.getByTestId('prompt-input');
+        const submitButton = page.getByTestId('submit-button');
+
+        await textarea.fill('complex dragon');
+        await submitButton.click();
+
+        // Wait for request to complete
+        await expect(page.getByTestId('result-section')).toBeVisible({ timeout: 10000 });
+
+        // Verify isFirstBuild was false
+        expect(capturedRequest).not.toBeNull();
+        expect(capturedRequest!.isFirstBuild).toBe(false);
+    });
+
+    test('should toggle advanced mode off and show badge again', async ({ page }) => {
+        // Wait for first-build status to load
+        await page.waitForTimeout(500);
+
+        const toggle = page.getByTestId('advanced-mode-switch');
+        const badge = page.getByTestId('first-build-badge');
+
+        // Initially badge visible
+        await expect(badge).toBeVisible();
+
+        // Enable advanced mode
+        await toggle.click();
+        await expect(badge).not.toBeVisible();
+
+        // Disable advanced mode
+        await toggle.click();
+        await expect(badge).toBeVisible();
+    });
+});
