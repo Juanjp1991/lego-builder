@@ -124,13 +124,19 @@ describe('GenerationProgress', () => {
     describe('GENERATION_STAGES export', () => {
         it('should export stage configuration', () => {
             expect(GENERATION_STAGES).toBeDefined();
-            expect(GENERATION_STAGES).toHaveLength(3);
+            expect(GENERATION_STAGES).toHaveLength(6); // 3 standard + 3 voxel phases
         });
 
-        it('should have correct stage order', () => {
+        it('should have correct standard stage order', () => {
             expect(GENERATION_STAGES[0].key).toBe('imagining');
             expect(GENERATION_STAGES[1].key).toBe('finding');
             expect(GENERATION_STAGES[2].key).toBe('building');
+        });
+
+        it('should have voxel pipeline stages', () => {
+            expect(GENERATION_STAGES[3].key).toBe('imagining-voxel');
+            expect(GENERATION_STAGES[4].key).toBe('imagining-lego');
+            expect(GENERATION_STAGES[5].key).toBe('finding-bricks');
         });
 
         it('should have labels for all stages', () => {

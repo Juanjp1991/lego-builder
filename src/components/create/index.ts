@@ -7,3 +7,5 @@ export { TemplateSuggestions, TEMPLATE_SUGGESTIONS } from './TemplateSuggestions
 export type { TemplateSuggestionsProps, TemplateSuggestion } from './TemplateSuggestions';
 export { FirstBuildBadge } from './FirstBuildBadge';
 export { AdvancedModeToggle } from './AdvancedModeToggle';
+export { VoxelPreview } from './VoxelPreview';
+export type { VoxelPreviewProps } from './VoxelPreview';

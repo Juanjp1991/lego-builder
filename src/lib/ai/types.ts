@@ -38,8 +38,21 @@ export type SupportedImageType = (typeof SUPPORTED_IMAGE_TYPES)[number];
  * Available AI models for generation.
  * - flash: Fast, cost-effective (gemini-2.5-flash)
  * - pro: More capable, slower (gemini-2.5-pro)
+ * - flash-image: Image generation (gemini-2.5-flash-image)
  */
-export type AIModel = 'flash' | 'pro';
+export type AIModel = 'flash' | 'pro' | 'flash-image';
+
+/**
+ * Voxel art style options for image generation.
+ * - minecraft: Blocky Minecraft-style with 16x16 textures
+ * - isometric: Clean isometric voxel art (default)
+ */
+export type VoxelStyle = 'minecraft' | 'isometric';
+
+/**
+ * Pipeline step identifier for error tracking in two-step generation.
+ */
+export type PipelineStep = 'voxel-generation' | 'lego-generation';
 
 /**
  * Request body for the /api/generate endpoint.
@@ -67,6 +80,29 @@ export const VALIDATION_CONSTRAINTS = {
   /** Minimum prompt length in characters */
   MIN_PROMPT_LENGTH: 1,
 } as const;
+
+/**
+ * Request body for the /api/generate-voxel-image endpoint.
+ */
+export interface GenerateVoxelImageRequestBody {
+  /** Text prompt describing what to create as voxel art */
+  prompt: string;
+  /** Optional: Voxel art style preference. Default: 'isometric' */
+  style?: VoxelStyle;
+}
+
+/**
+ * Success response from voxel image generation.
+ */
+export interface GenerateVoxelImageResponse {
+  success: true;
+  /** Base64 encoded PNG image data */
+  imageData: string;
+  /** MIME type of the generated image */
+  mimeType: 'image/png';
+  /** Echo of the original prompt for UI display */
+  prompt: string;
+}
 
 /**
  * LEGO build categories for specialized guidelines.

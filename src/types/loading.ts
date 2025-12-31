@@ -1,4 +1,16 @@
-export type LoadingPhase = 'imagining' | 'finding' | 'building';
+/**
+ * Loading phases for generation progress.
+ * Standard phases: imagining, finding, building
+ * Voxel pipeline phases: imagining-voxel, imagining-lego, finding-bricks
+ */
+export type LoadingPhase =
+    | 'imagining'
+    | 'finding'
+    | 'building'
+    // Voxel pipeline phases
+    | 'imagining-voxel'
+    | 'imagining-lego'
+    | 'finding-bricks';
 
 export interface LoadingStateProps {
     /** Initial phase to display */

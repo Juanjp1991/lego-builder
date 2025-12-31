@@ -276,7 +276,7 @@ describe('/api/generate', () => {
 
       expect(streamText).toHaveBeenCalledWith(
         expect.objectContaining({
-          system: expect.stringContaining('50 bricks'),
+          system: expect.stringContaining('beginner-friendly'),
         })
       );
     });
@@ -320,7 +320,7 @@ describe('/api/generate', () => {
 
       expect(streamText).toHaveBeenCalledWith(
         expect.objectContaining({
-          system: expect.stringContaining('50 bricks'),
+          system: expect.stringContaining('beginner-friendly'),
         })
       );
     });

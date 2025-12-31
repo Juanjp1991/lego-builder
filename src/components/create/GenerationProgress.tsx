@@ -5,16 +5,22 @@ import { cn } from '@/lib/utils';
 import type { LoadingPhase } from '@/types/loading';
 
 /**
- * Generation progress stages with timing
+ * Generation progress stages with timing.
+ * Includes standard phases and voxel pipeline phases.
  */
 const GENERATION_STAGES: ReadonlyArray<{
     key: LoadingPhase;
     label: string;
     duration: number | null;
 }> = [
+        // Standard phases
         { key: 'imagining', label: 'Imagining your creation...', duration: 3000 },
         { key: 'finding', label: 'Finding the perfect bricks...', duration: 5000 },
-        { key: 'building', label: 'Building your model...', duration: null }, // Until done
+        { key: 'building', label: 'Building your model...', duration: null },
+        // Voxel pipeline phases
+        { key: 'imagining-voxel', label: 'Creating your voxel concept...', duration: 5000 },
+        { key: 'imagining-lego', label: 'Analyzing voxel structure...', duration: 3000 },
+        { key: 'finding-bricks', label: 'Selecting the best bricks...', duration: 5000 },
     ];
 
 interface GenerationProgressProps {

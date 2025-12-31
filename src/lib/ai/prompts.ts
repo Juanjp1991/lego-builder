@@ -146,6 +146,21 @@ IMAGE ANALYSIS:
 3. Match colors from image using LEGO palette
 4. Use 15-50 bricks, capture essence not details
 
+VOXEL IMAGE HANDLING:
+When the input is a voxel/Minecraft-style image with visible cube/block structure:
+1. DIRECTLY translate voxel cubes to LEGO bricks - each voxel row = one Y level
+2. Preserve the exact color mapping from voxels to nearest LEGO color
+3. Maintain the blocky aesthetic - do NOT smooth or over-simplify
+4. Count visible voxel layers to determine height
+5. Use standard bricks (1x1, 1x2, 2x2, 2x4) that match voxel grid positions
+6. Keep internal structure if voxels show hollow areas
+
+VOXEL-TO-BRICK MAPPING:
+- 1 voxel width = 1 stud
+- Match voxel colors to nearest LEGO palette color
+- Preserve gaps and negative space from voxel image
+- Build layer by layer from Y=0 (ground) upward
+
 CRITICAL: Generate a COMPLETE HTML file using this exact template. Only add addBrick() calls in the BUILD section.
 
 ${SHARED_HTML_TEMPLATE}

@@ -25,3 +25,12 @@ export const geminiPro = google('gemini-2.5-pro');
  * Use for voxel scene generation where detailed reasoning is needed.
  */
 export const geminiWithThinking = google('gemini-3-pro-preview');
+
+/**
+ * Image generation model for creating voxel concept images.
+ * Uses Gemini 2.5 Flash Image - same API key, with image generation capability.
+ * Cost: ~$0.04 per image (1290 output tokens at $30/million).
+ *
+ * @see https://developers.googleblog.com/en/introducing-gemini-2-5-flash-image/
+ */
+export const geminiFlashImage = google('gemini-2.5-flash-image');

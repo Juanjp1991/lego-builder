@@ -8,6 +8,10 @@ const PHASE_MESSAGES: Record<LoadingPhase, string> = {
     imagining: 'Imagining your creation...',
     finding: 'Finding the perfect bricks...',
     building: 'Building your model...',
+    // Voxel pipeline phases
+    'imagining-voxel': 'Creating your voxel concept...',
+    'imagining-lego': 'Analyzing voxel structure...',
+    'finding-bricks': 'Selecting the best bricks...',
 };
 
 const PHASE_SEQUENCE: LoadingPhase[] = ['imagining', 'finding', 'building'];

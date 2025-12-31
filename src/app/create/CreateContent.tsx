@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useTextToModel } from '@/hooks/useTextToModel';
 import { useImageToModel } from '@/hooks/useImageToModel';
+import { useTextToVoxelModel } from '@/hooks/useTextToVoxelModel';
 import { useFirstBuild } from '@/hooks/useFirstBuild';
 import { PromptInput } from '@/components/create/PromptInput';
 import { ImageUpload } from '@/components/create/ImageUpload';
@@ -13,6 +14,7 @@ import { FirstBuildBadge } from '@/components/create/FirstBuildBadge';
 import { AdvancedModeToggle } from '@/components/create/AdvancedModeToggle';
 import { StructuralFeedback } from '@/components/create/StructuralFeedback';
 import { RegeneratePrompt } from '@/components/create/RegeneratePrompt';
+import { VoxelPreview } from '@/components/create/VoxelPreview';
 import { ModelViewer } from '@/components/viewer/ModelViewer';
 import { cn } from '@/lib/utils';
 import { MAX_RETRIES } from '@/lib/constants';
@@ -21,8 +23,11 @@ import type { AIModel } from '@/lib/ai/types';
 
 /**
  * Input mode for model generation
+ * - text: Direct text-to-LEGO (fast)
+ * - image: Image-to-LEGO (from uploaded image)
+ * - text-to-voxel: Two-step pipeline (text → voxel → LEGO, higher quality)
  */
-type InputMode = 'text' | 'image';
+type InputMode = 'text' | 'image' | 'text-to-voxel';
 
 /**
  * CreateContent Component
@@ -52,6 +57,9 @@ export function CreateContent() {
     // Image-to-model generation state
     const imageGeneration = useImageToModel();
 
+    // Two-step voxel pipeline state
+    const voxelGeneration = useTextToVoxelModel();
+
     // First-build guarantee state
     const {
         isLoading: isFirstBuildLoading,
@@ -62,21 +70,53 @@ export function CreateContent() {
     } = useFirstBuild();
 
     // Get active generation state based on mode
-    const activeGeneration = mode === 'text' ? textGeneration : imageGeneration;
+    // For text-to-voxel mode, we use the voxelGeneration hook
+    const activeGeneration = mode === 'text'
+        ? textGeneration
+        : mode === 'image'
+            ? imageGeneration
+            : null; // voxel mode has different state structure
 
+    // For standard modes (text/image)
     const {
-        status,
-        phase,
-        generatedHtml,
-        error,
-        reset,
-        duration,
-        retryCount,
-        isRetryAvailable,
-        isRetryExhausted,
-        retry,
-        structuralAnalysis,
-    } = activeGeneration;
+        status: standardStatus,
+        phase: standardPhase,
+        generatedHtml: standardHtml,
+        error: standardError,
+        reset: standardReset,
+        duration: standardDuration,
+        retryCount: standardRetryCount,
+        isRetryAvailable: standardRetryAvailable,
+        isRetryExhausted: standardRetryExhausted,
+        retry: standardRetry,
+        structuralAnalysis: standardStructuralAnalysis,
+    } = activeGeneration || {
+        status: 'idle' as const,
+        phase: null,
+        generatedHtml: null,
+        error: null,
+        reset: () => {},
+        duration: null,
+        retryCount: 0,
+        isRetryAvailable: false,
+        isRetryExhausted: false,
+        retry: () => {},
+        structuralAnalysis: null,
+    };
+
+    // Unified state for all modes
+    const status = mode === 'text-to-voxel' ? voxelGeneration.status : standardStatus;
+    const phase = mode === 'text-to-voxel' ? voxelGeneration.phase : standardPhase;
+    const generatedHtml = mode === 'text-to-voxel' ? voxelGeneration.generatedHtml : standardHtml;
+    const error = mode === 'text-to-voxel' ? voxelGeneration.error : standardError;
+    const duration = mode === 'text-to-voxel' ? voxelGeneration.duration : standardDuration;
+    const structuralAnalysis = mode === 'text-to-voxel' ? voxelGeneration.structuralAnalysis : standardStructuralAnalysis;
+
+    const reset = mode === 'text-to-voxel' ? voxelGeneration.reset : standardReset;
+    const retryCount = mode === 'text-to-voxel' ? voxelGeneration.legoRetryCount : standardRetryCount;
+    const isRetryAvailable = mode === 'text-to-voxel' ? voxelGeneration.isLegoRetryAvailable : standardRetryAvailable;
+    const isRetryExhausted = mode === 'text-to-voxel' ? !voxelGeneration.isLegoRetryAvailable && voxelGeneration.legoRetryCount >= MAX_RETRIES : standardRetryExhausted;
+    const retry = mode === 'text-to-voxel' ? voxelGeneration.retryLego : standardRetry;
 
     // TRACK STRUCTURAL FEEDBACK SHOWN (Story 2.6)
     useEffect(() => {
@@ -91,19 +131,50 @@ export function CreateContent() {
     }, [status, structuralAnalysis, mode]);
 
     // Hook-specific properties needed for stability regeneration
-    const lastPrompt = mode === 'text' ? textGeneration.lastPrompt : null;
+    const lastPrompt = mode === 'text'
+        ? textGeneration.lastPrompt
+        : mode === 'text-to-voxel'
+            ? voxelGeneration.lastPrompt
+            : null;
 
-    const isGenerating = status === 'generating';
+    // Status checks - account for voxel pipeline statuses
+    const isGenerating = status === 'generating' ||
+        status === 'generating-voxel' ||
+        status === 'generating-lego';
     const hasResult = status === 'success' && generatedHtml;
     const hasError = status === 'error';
     const isIdle = status === 'idle';
+    const isAwaitingApproval = status === 'awaiting-approval';
 
     /**
-     * Handle text prompt submission
+     * Handle text prompt submission (direct text-to-LEGO)
      */
     const handleTextSubmit = async (prompt: string) => {
         setShowStructuralFeedback(true); // Reset feedback visibility for new generation
         await textGeneration.generate(prompt, isFirstBuildMode, selectedModel);
+    };
+
+    /**
+     * Handle voxel prompt submission (two-step pipeline)
+     */
+    const handleVoxelSubmit = async (prompt: string) => {
+        setShowStructuralFeedback(true);
+        await voxelGeneration.generateVoxel(prompt);
+    };
+
+    /**
+     * Handle voxel approval - proceed to LEGO generation
+     */
+    const handleVoxelApprove = async () => {
+        setShowStructuralFeedback(true);
+        await voxelGeneration.approveVoxel(isFirstBuildMode);
+    };
+
+    /**
+     * Handle voxel regeneration
+     */
+    const handleVoxelRegenerate = async () => {
+        await voxelGeneration.regenerateVoxel();
     };
 
     /**
@@ -134,10 +205,17 @@ export function CreateContent() {
      * Resets state and generates with the template prompt
      */
     const handleTemplateSelect = async (prompt: string) => {
-        setMode('text'); // Switch to text mode first
-        setShowStructuralFeedback(true);
-        reset(); // Reset to clear retry count
-        await textGeneration.generate(prompt, isFirstBuildMode, selectedModel); // Generate with template prompt
+        // Use voxel mode for templates if currently in voxel mode, otherwise text mode
+        if (mode === 'text-to-voxel') {
+            setShowStructuralFeedback(true);
+            voxelGeneration.reset();
+            await voxelGeneration.generateVoxel(prompt);
+        } else {
+            setMode('text'); // Switch to text mode first
+            setShowStructuralFeedback(true);
+            reset(); // Reset to clear retry count
+            await textGeneration.generate(prompt, isFirstBuildMode, selectedModel);
+        }
     };
 
     /**
@@ -214,7 +292,7 @@ export function CreateContent() {
                                 type="button"
                                 onClick={() => handleModeSwitch('text')}
                                 className={cn(
-                                    'px-4 py-2 text-sm font-medium rounded-md transition-colors',
+                                    'px-3 py-2 text-sm font-medium rounded-md transition-colors',
                                     'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
                                     mode === 'text'
                                         ? 'bg-primary text-primary-foreground shadow-sm'
@@ -222,14 +300,31 @@ export function CreateContent() {
                                 )}
                                 data-testid="mode-text-button"
                                 aria-pressed={mode === 'text'}
+                                title="Fast text-to-LEGO generation"
                             >
                                 Text
                             </button>
                             <button
                                 type="button"
+                                onClick={() => handleModeSwitch('text-to-voxel')}
+                                className={cn(
+                                    'px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
+                                    mode === 'text-to-voxel'
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )}
+                                data-testid="mode-voxel-button"
+                                aria-pressed={mode === 'text-to-voxel'}
+                                title="Two-step: Text → Voxel preview → LEGO (higher quality)"
+                            >
+                                Text (HD)
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => handleModeSwitch('image')}
                                 className={cn(
-                                    'px-4 py-2 text-sm font-medium rounded-md transition-colors',
+                                    'px-3 py-2 text-sm font-medium rounded-md transition-colors',
                                     'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
                                     mode === 'image'
                                         ? 'bg-primary text-primary-foreground shadow-sm'
@@ -237,6 +332,7 @@ export function CreateContent() {
                                 )}
                                 data-testid="mode-image-button"
                                 aria-pressed={mode === 'image'}
+                                title="Upload an image to convert to LEGO"
                             >
                                 Image
                             </button>
@@ -303,6 +399,42 @@ export function CreateContent() {
                     <ImageUpload
                         onImageSelect={handleImageSelect}
                         isLoading={isGenerating}
+                    />
+                </section>
+            )}
+
+            {/* Voxel Input - Shown when in text-to-voxel mode and idle */}
+            {mode === 'text-to-voxel' && isIdle && (
+                <section aria-labelledby="voxel-prompt-section">
+                    <h2 id="voxel-prompt-section" className="sr-only">
+                        Enter your design description (HD mode)
+                    </h2>
+                    <div className="text-center mb-4">
+                        <p className="text-sm text-muted-foreground">
+                            HD mode creates a voxel preview first for better quality results
+                        </p>
+                    </div>
+                    <PromptInput
+                        onSubmit={handleVoxelSubmit}
+                        isLoading={isGenerating}
+                    />
+                </section>
+            )}
+
+            {/* Voxel Preview - Shown when awaiting approval */}
+            {mode === 'text-to-voxel' && isAwaitingApproval && voxelGeneration.voxelImage && (
+                <section aria-labelledby="voxel-preview-section">
+                    <h2 id="voxel-preview-section" className="sr-only">
+                        Review your voxel concept
+                    </h2>
+                    <VoxelPreview
+                        imageUrl={voxelGeneration.voxelImage.previewUrl}
+                        originalPrompt={voxelGeneration.voxelImage.prompt}
+                        onApprove={handleVoxelApprove}
+                        onRegenerate={handleVoxelRegenerate}
+                        onCancel={voxelGeneration.reset}
+                        isLoading={voxelGeneration.status === 'generating-lego'}
+                        isRegenerating={voxelGeneration.status === 'generating-voxel'}
                     />
                 </section>
             )}
