@@ -6,8 +6,11 @@ import { useImageToModel } from '@/hooks/useImageToModel';
 import { PromptInput } from '@/components/create/PromptInput';
 import { ImageUpload } from '@/components/create/ImageUpload';
 import { GenerationProgress } from '@/components/create/GenerationProgress';
+import { RetryButton } from '@/components/create/RetryButton';
+import { TemplateSuggestions } from '@/components/create/TemplateSuggestions';
 import { ModelViewer } from '@/components/viewer/ModelViewer';
 import { cn } from '@/lib/utils';
+import { MAX_RETRIES } from '@/lib/constants';
 
 /**
  * Input mode for model generation
@@ -46,6 +49,10 @@ export function CreateContent() {
         error,
         reset,
         duration,
+        retryCount,
+        isRetryAvailable,
+        isRetryExhausted,
+        retry,
     } = activeGeneration;
 
     const isGenerating = status === 'generating';
@@ -79,6 +86,16 @@ export function CreateContent() {
      */
     const handleNewDesign = () => {
         reset();
+    };
+
+    /**
+     * Handle template selection (from TemplateSuggestions)
+     * Resets state and generates with the template prompt
+     */
+    const handleTemplateSelect = async (prompt: string) => {
+        setMode('text'); // Switch to text mode first
+        reset(); // Reset to clear retry count
+        await textGeneration.generate(prompt); // Generate with template prompt
     };
 
     /**
@@ -234,8 +251,33 @@ export function CreateContent() {
                         }}
                     />
 
-                    {/* Action buttons */}
-                    <div className="flex justify-center gap-4">
+                    {/* Retry Section */}
+                    <div className="flex flex-col items-center gap-4">
+                        {/* Show retry count when retries have been used */}
+                        {retryCount > 0 && !isRetryExhausted && (
+                            <p
+                                className="text-sm text-muted-foreground"
+                                data-testid="retry-count-display"
+                            >
+                                Attempt {retryCount + 1} of {MAX_RETRIES + 1}
+                            </p>
+                        )}
+
+                        {/* Retry Button - Only shown when retry is available */}
+                        {isRetryAvailable && (
+                            <RetryButton
+                                onRetry={retry}
+                                retryCount={retryCount}
+                                maxRetries={MAX_RETRIES}
+                            />
+                        )}
+
+                        {/* Template Suggestions - Shown when retries exhausted */}
+                        {isRetryExhausted && (
+                            <TemplateSuggestions onSelectTemplate={handleTemplateSelect} />
+                        )}
+
+                        {/* New Design Button */}
                         <button
                             onClick={handleNewDesign}
                             className={cn(

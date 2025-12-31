@@ -649,3 +649,281 @@ test.describe('Create Page - Image Mode', () => {
         await expect(page.getByTestId('image-upload-zone')).not.toBeVisible();
     });
 });
+
+/**
+ * E2E Tests for Free Retry Mechanism
+ * @see Story 2.4: Add Free Retry Mechanism
+ * @see FR3: Users can regenerate a model with the same prompt (free retry, up to 3x)
+ * @see FR37: After exhausting retries, template suggestions are offered
+ */
+test.describe('Create Page - Retry Mechanism', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/create');
+    });
+
+    test('should show Try Again button after successful generation', async ({ page }) => {
+        // Mock successful API response
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        const textarea = page.getByTestId('prompt-input');
+        const submitButton = page.getByTestId('submit-button');
+
+        // Generate a model
+        await textarea.fill('dragon');
+        await submitButton.click();
+
+        // Wait for result section
+        const resultSection = page.getByTestId('result-section');
+        await expect(resultSection).toBeVisible({ timeout: 10000 });
+
+        // Retry button should be visible with correct text
+        const retryButton = page.getByTestId('retry-button');
+        await expect(retryButton).toBeVisible();
+        await expect(retryButton).toContainText('Try Again');
+        await expect(retryButton).toContainText('3 left'); // All 3 retries available
+    });
+
+    test('should update retry count display after retry', async ({ page }) => {
+        // Mock successful API response
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        const textarea = page.getByTestId('prompt-input');
+        const submitButton = page.getByTestId('submit-button');
+
+        // First generation
+        await textarea.fill('dragon');
+        await submitButton.click();
+
+        // Wait for result and retry button
+        const retryButton = page.getByTestId('retry-button');
+        await expect(retryButton).toBeVisible({ timeout: 10000 });
+        await expect(retryButton).toContainText('3 left');
+
+        // Click retry
+        await retryButton.click();
+
+        // Wait for new result
+        await expect(retryButton).toBeVisible({ timeout: 10000 });
+
+        // Should now show 2 retries left
+        await expect(retryButton).toContainText('2 left');
+
+        // Should show attempt count
+        const retryCountDisplay = page.getByTestId('retry-count-display');
+        await expect(retryCountDisplay).toBeVisible();
+        await expect(retryCountDisplay).toContainText('Attempt 2 of 4');
+    });
+
+    test('should disable retry button after 3 retries', async ({ page }) => {
+        // Mock successful API response
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        const textarea = page.getByTestId('prompt-input');
+        const submitButton = page.getByTestId('submit-button');
+
+        // First generation
+        await textarea.fill('dragon');
+        await submitButton.click();
+
+        // Wait for result
+        const retryButton = page.getByTestId('retry-button');
+        await expect(retryButton).toBeVisible({ timeout: 10000 });
+
+        // Retry 3 times (use all retries)
+        for (let i = 0; i < 3; i++) {
+            await retryButton.click();
+            await expect(retryButton).toBeVisible({ timeout: 10000 });
+        }
+
+        // Retry button should show "No retries left" and be disabled
+        await expect(retryButton).toContainText('No retries left');
+        await expect(retryButton).toBeDisabled();
+    });
+
+    test('should show template suggestions when retries exhausted', async ({ page }) => {
+        // Mock successful API response
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        const textarea = page.getByTestId('prompt-input');
+        const submitButton = page.getByTestId('submit-button');
+
+        // First generation
+        await textarea.fill('dragon');
+        await submitButton.click();
+
+        // Wait for result
+        const retryButton = page.getByTestId('retry-button');
+        await expect(retryButton).toBeVisible({ timeout: 10000 });
+
+        // Retry 3 times (use all retries)
+        for (let i = 0; i < 3; i++) {
+            await retryButton.click();
+            await expect(retryButton).toBeVisible({ timeout: 10000 });
+        }
+
+        // Template suggestions should appear
+        const templateSuggestions = page.getByTestId('template-suggestions');
+        await expect(templateSuggestions).toBeVisible();
+
+        // Should show the heading
+        await expect(page.getByText('Not quite right? Try one of these simple templates:')).toBeVisible();
+
+        // Should show 4 templates
+        await expect(page.getByText('Simple House')).toBeVisible();
+        await expect(page.getByText('Car')).toBeVisible();
+        await expect(page.getByText('Tree')).toBeVisible();
+        await expect(page.getByText('Robot')).toBeVisible();
+    });
+
+    test('should generate new model when clicking template suggestion', async ({ page }) => {
+        // Mock successful API response
+        let requestCount = 0;
+        await page.route('**/api/generate', async (route) => {
+            requestCount++;
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        const textarea = page.getByTestId('prompt-input');
+        const submitButton = page.getByTestId('submit-button');
+
+        // First generation
+        await textarea.fill('dragon');
+        await submitButton.click();
+
+        // Use all 3 retries
+        const retryButton = page.getByTestId('retry-button');
+        await expect(retryButton).toBeVisible({ timeout: 10000 });
+
+        for (let i = 0; i < 3; i++) {
+            await retryButton.click();
+            await expect(retryButton).toBeVisible({ timeout: 10000 });
+        }
+
+        // Click a template suggestion
+        const simpleHouseTemplate = page.getByTestId('template-simple-house');
+        await expect(simpleHouseTemplate).toBeVisible();
+        await simpleHouseTemplate.click();
+
+        // Wait for new generation to complete
+        await expect(page.getByTestId('result-section')).toBeVisible({ timeout: 10000 });
+
+        // Should have made another API request
+        // Note: 1 initial + 3 retries + 1 template = 5 total requests
+        expect(requestCount).toBe(5);
+
+        // Retry button should be reset (3 retries available again)
+        const newRetryButton = page.getByTestId('retry-button');
+        await expect(newRetryButton).toBeVisible();
+        await expect(newRetryButton).toContainText('3 left');
+
+        // Template suggestions should not be visible
+        await expect(page.getByTestId('template-suggestions')).not.toBeVisible();
+    });
+
+    test('should reset retry counter when starting new design', async ({ page }) => {
+        // Mock successful API response
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        const textarea = page.getByTestId('prompt-input');
+        const submitButton = page.getByTestId('submit-button');
+
+        // First generation
+        await textarea.fill('dragon');
+        await submitButton.click();
+
+        // Use 1 retry
+        const retryButton = page.getByTestId('retry-button');
+        await expect(retryButton).toBeVisible({ timeout: 10000 });
+        await retryButton.click();
+        await expect(retryButton).toBeVisible({ timeout: 10000 });
+        await expect(retryButton).toContainText('2 left');
+
+        // Click New Design
+        const newDesignButton = page.getByTestId('new-design-button');
+        await newDesignButton.click();
+
+        // Should be back to input state
+        await expect(page.getByTestId('prompt-input')).toBeVisible();
+
+        // Generate with new prompt
+        await textarea.fill('castle');
+        await submitButton.click();
+
+        // Wait for result
+        await expect(retryButton).toBeVisible({ timeout: 10000 });
+
+        // Should have reset to 3 retries
+        await expect(retryButton).toContainText('3 left');
+    });
+
+    test('should work with image mode retries', async ({ page }) => {
+        // Mock successful API response
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockSuccessHtml,
+            });
+        });
+
+        // Switch to image mode
+        const imageButton = page.getByTestId('mode-image-button');
+        await imageButton.click();
+
+        // Upload an image
+        const fileInput = page.getByTestId('file-input');
+        await fileInput.setInputFiles({
+            name: 'test.png',
+            mimeType: 'image/png',
+            buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+        });
+
+        // Wait for result
+        const retryButton = page.getByTestId('retry-button');
+        await expect(retryButton).toBeVisible({ timeout: 15000 });
+
+        // Should show 3 retries available
+        await expect(retryButton).toContainText('3 left');
+
+        // Click retry
+        await retryButton.click();
+
+        // Should now show 2 retries left
+        await expect(retryButton).toBeVisible({ timeout: 10000 });
+        await expect(retryButton).toContainText('2 left');
+    });
+});

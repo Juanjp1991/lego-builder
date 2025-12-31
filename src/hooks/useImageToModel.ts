@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { LoadingPhase } from '@/types/loading';
+import { MAX_RETRIES } from '@/lib/constants';
 
 /**
  * Generation status state machine
@@ -48,10 +49,18 @@ export interface UseImageToModelReturn {
     errorCode: string | null;
     /** Start generation from image file */
     generate: (file: File) => Promise<void>;
-    /** Reset to idle state */
+    /** Reset to idle state (clears retry count) */
     reset: () => void;
     /** Generation duration in ms (for NFR1 tracking) */
     duration: number | null;
+    /** Current retry count (0 = first attempt, 1 = first retry, etc.) */
+    retryCount: number;
+    /** Whether retry is available (success state and retries not exhausted) */
+    isRetryAvailable: boolean;
+    /** Whether retry limit has been reached */
+    isRetryExhausted: boolean;
+    /** Retry with the same image */
+    retry: () => void;
 }
 
 /**
@@ -101,11 +110,14 @@ export function useImageToModel(): UseImageToModelReturn {
     const [error, setError] = useState<string | null>(null);
     const [errorCode, setErrorCode] = useState<string | null>(null);
     const [duration, setDuration] = useState<number | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
 
     // Refs for cleanup
     const phaseTimersRef = useRef<NodeJS.Timeout[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
     const startTimeRef = useRef<number | null>(null);
+    // Store last file data for retry capability
+    const lastFileDataRef = useRef<{ file: File; base64: string; mimeType: string } | null>(null);
 
     /**
      * Cleanup on unmount - abort any pending requests and clear timers
@@ -162,9 +174,9 @@ export function useImageToModel(): UseImageToModelReturn {
     }, []);
 
     /**
-     * Generate model from image file
+     * Internal generate function that handles both new files and retries
      */
-    const generate = useCallback(async (file: File): Promise<void> => {
+    const generateInternal = useCallback(async (file: File, isRetry: boolean): Promise<void> => {
         // Cancel any in-progress generation
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -186,8 +198,24 @@ export function useImageToModel(): UseImageToModelReturn {
         abortControllerRef.current = new AbortController();
 
         try {
-            // Convert file to base64
-            const imageData = await fileToBase64(file);
+            let imageData: string;
+            let mimeType: string;
+
+            // For retries, use stored data; for new files, convert and store
+            if (isRetry && lastFileDataRef.current) {
+                // Use cached data for retry
+                imageData = lastFileDataRef.current.base64;
+                mimeType = lastFileDataRef.current.mimeType;
+                // Increment retry count
+                setRetryCount((prev) => prev + 1);
+            } else {
+                // New file - convert and store
+                imageData = await fileToBase64(file);
+                mimeType = file.type;
+                // Reset retry count and store file data
+                setRetryCount(0);
+                lastFileDataRef.current = { file, base64: imageData, mimeType };
+            }
 
             const response = await fetch('/api/generate', {
                 method: 'POST',
@@ -195,7 +223,7 @@ export function useImageToModel(): UseImageToModelReturn {
                 body: JSON.stringify({
                     prompt: DEFAULT_IMAGE_PROMPT,
                     imageData,
-                    mimeType: file.type,
+                    mimeType,
                 }),
                 signal: abortControllerRef.current.signal,
             });
@@ -266,7 +294,25 @@ export function useImageToModel(): UseImageToModelReturn {
     }, [clearPhaseTimers, startPhaseTransitions, parseError]);
 
     /**
-     * Reset to idle state
+     * Generate model from image file (public API)
+     * Resets retry count for new files
+     */
+    const generate = useCallback(async (file: File): Promise<void> => {
+        await generateInternal(file, false);
+    }, [generateInternal]);
+
+    /**
+     * Retry with the same image
+     * Only works if a previous image was stored and retries are available
+     */
+    const retry = useCallback(() => {
+        if (lastFileDataRef.current && retryCount < MAX_RETRIES) {
+            generateInternal(lastFileDataRef.current.file, true);
+        }
+    }, [generateInternal, retryCount]);
+
+    /**
+     * Reset to idle state (clears retry count)
      */
     const reset = useCallback(() => {
         // Abort any in-progress request
@@ -281,8 +327,14 @@ export function useImageToModel(): UseImageToModelReturn {
         setError(null);
         setErrorCode(null);
         setDuration(null);
+        setRetryCount(0);
         startTimeRef.current = null;
+        lastFileDataRef.current = null;
     }, [clearPhaseTimers]);
+
+    // Computed values for retry availability
+    const isRetryAvailable = status === 'success' && retryCount < MAX_RETRIES;
+    const isRetryExhausted = retryCount >= MAX_RETRIES;
 
     return {
         status,
@@ -293,5 +345,9 @@ export function useImageToModel(): UseImageToModelReturn {
         generate,
         reset,
         duration,
+        retryCount,
+        isRetryAvailable,
+        isRetryExhausted,
+        retry,
     };
 }

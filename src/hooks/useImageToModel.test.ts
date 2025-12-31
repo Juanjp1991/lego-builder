@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useImageToModel } from './useImageToModel';
+import { MAX_RETRIES } from '@/lib/constants';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -420,6 +421,199 @@ describe('useImageToModel', () => {
 
             await waitFor(() => {
                 expect(result.current.generatedHtml).toBe('<html>test</html>');
+            });
+        });
+    });
+
+    describe('Retry Functionality', () => {
+        it('starts with retryCount 0', () => {
+            const { result } = renderHook(() => useImageToModel());
+
+            expect(result.current.retryCount).toBe(0);
+        });
+
+        it('starts with isRetryAvailable false', () => {
+            const { result } = renderHook(() => useImageToModel());
+
+            expect(result.current.isRetryAvailable).toBe(false);
+        });
+
+        it('starts with isRetryExhausted false', () => {
+            const { result } = renderHook(() => useImageToModel());
+
+            expect(result.current.isRetryExhausted).toBe(false);
+        });
+
+        it('has isRetryAvailable true after successful generation', async () => {
+            mockFetch.mockResolvedValueOnce(createStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useImageToModel());
+
+            await act(async () => {
+                await result.current.generate(createMockFile());
+            });
+
+            await waitFor(() => {
+                expect(result.current.isRetryAvailable).toBe(true);
+            });
+        });
+
+        it('keeps retryCount at 0 for first generation', async () => {
+            mockFetch.mockResolvedValueOnce(createStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useImageToModel());
+
+            await act(async () => {
+                await result.current.generate(createMockFile());
+            });
+
+            await waitFor(() => {
+                expect(result.current.retryCount).toBe(0);
+            });
+        });
+
+        it('increments retryCount when retry() is called', async () => {
+            mockFetch.mockResolvedValue(createStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useImageToModel());
+
+            // First generation
+            await act(async () => {
+                await result.current.generate(createMockFile());
+            });
+
+            await waitFor(() => {
+                expect(result.current.retryCount).toBe(0);
+            });
+
+            // First retry
+            await act(async () => {
+                result.current.retry();
+            });
+
+            await waitFor(() => {
+                expect(result.current.retryCount).toBe(1);
+            });
+        });
+
+        it('allows up to MAX_RETRIES retries', async () => {
+            mockFetch.mockResolvedValue(createStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useImageToModel());
+
+            // First generation
+            await act(async () => {
+                await result.current.generate(createMockFile());
+            });
+
+            // Retry MAX_RETRIES times
+            for (let i = 0; i < MAX_RETRIES; i++) {
+                await act(async () => {
+                    result.current.retry();
+                });
+            }
+
+            await waitFor(() => {
+                expect(result.current.retryCount).toBe(MAX_RETRIES);
+                expect(result.current.isRetryExhausted).toBe(true);
+                expect(result.current.isRetryAvailable).toBe(false);
+            });
+        });
+
+        it('does not increment retryCount beyond MAX_RETRIES', async () => {
+            mockFetch.mockResolvedValue(createStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useImageToModel());
+
+            await act(async () => {
+                await result.current.generate(createMockFile());
+            });
+
+            // Retry MAX_RETRIES times
+            for (let i = 0; i < MAX_RETRIES; i++) {
+                await act(async () => {
+                    result.current.retry();
+                });
+            }
+
+            // Try to retry again (should not work)
+            await act(async () => {
+                result.current.retry();
+            });
+
+            await waitFor(() => {
+                expect(result.current.retryCount).toBe(MAX_RETRIES);
+            });
+        });
+
+        it('resets retryCount when reset() is called', async () => {
+            mockFetch.mockResolvedValue(createStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useImageToModel());
+
+            await act(async () => {
+                await result.current.generate(createMockFile());
+            });
+
+            await act(async () => {
+                result.current.retry();
+            });
+
+            await waitFor(() => {
+                expect(result.current.retryCount).toBe(1);
+            });
+
+            act(() => {
+                result.current.reset();
+            });
+
+            expect(result.current.retryCount).toBe(0);
+            expect(result.current.isRetryExhausted).toBe(false);
+        });
+
+        it('resets retryCount when new file is generated', async () => {
+            mockFetch.mockResolvedValue(createStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useImageToModel());
+
+            await act(async () => {
+                await result.current.generate(createMockFile('first.png'));
+            });
+
+            await act(async () => {
+                result.current.retry();
+            });
+
+            await waitFor(() => {
+                expect(result.current.retryCount).toBe(1);
+            });
+
+            // Generate with new file
+            await act(async () => {
+                await result.current.generate(createMockFile('second.png'));
+            });
+
+            await waitFor(() => {
+                expect(result.current.retryCount).toBe(0);
+            });
+        });
+
+        it('has isRetryAvailable false during generation', async () => {
+            mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+            const { result } = renderHook(() => useImageToModel());
+
+            act(() => {
+                result.current.generate(createMockFile());
+            });
+
+            expect(result.current.status).toBe('generating');
+            expect(result.current.isRetryAvailable).toBe(false);
+        });
+
+        it('has isRetryAvailable false after error', async () => {
+            mockFetch.mockResolvedValueOnce(createErrorResponse('GENERATION_FAILED', 'Failed'));
+            const { result } = renderHook(() => useImageToModel());
+
+            await act(async () => {
+                await result.current.generate(createMockFile());
+            });
+
+            await waitFor(() => {
+                expect(result.current.status).toBe('error');
+                expect(result.current.isRetryAvailable).toBe(false);
             });
         });
     });

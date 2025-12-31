@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useTextToModel } from './useTextToModel';
+import { MAX_RETRIES } from '@/lib/constants';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -357,6 +358,198 @@ describe('useTextToModel', () => {
             });
 
             expect(result.current.phase).toBe('building');
+        });
+    });
+
+    describe('Retry Functionality', () => {
+        it('should have retryCount 0 initially', () => {
+            const { result } = renderHook(() => useTextToModel());
+
+            expect(result.current.retryCount).toBe(0);
+        });
+
+        it('should have isRetryAvailable false initially', () => {
+            const { result } = renderHook(() => useTextToModel());
+
+            expect(result.current.isRetryAvailable).toBe(false);
+        });
+
+        it('should have isRetryExhausted false initially', () => {
+            const { result } = renderHook(() => useTextToModel());
+
+            expect(result.current.isRetryExhausted).toBe(false);
+        });
+
+        it('should have isRetryAvailable true after successful generation', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            expect(result.current.isRetryAvailable).toBe(true);
+        });
+
+        it('should keep retryCount at 0 for first generation', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            expect(result.current.retryCount).toBe(0);
+        });
+
+        it('should increment retryCount when retry() is called', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useTextToModel());
+
+            // First generation
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            expect(result.current.retryCount).toBe(0);
+
+            // First retry
+            await act(async () => {
+                result.current.retry();
+            });
+
+            expect(result.current.retryCount).toBe(1);
+        });
+
+        it('should use the same prompt when retrying', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('my dragon');
+            });
+
+            mockFetch.mockClear();
+
+            await act(async () => {
+                result.current.retry();
+            });
+
+            expect(mockFetch).toHaveBeenCalledWith('/api/generate', expect.objectContaining({
+                body: JSON.stringify({ prompt: 'my dragon' }),
+            }));
+        });
+
+        it('should allow up to MAX_RETRIES retries', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useTextToModel());
+
+            // First generation
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            // Retry MAX_RETRIES times
+            for (let i = 0; i < MAX_RETRIES; i++) {
+                await act(async () => {
+                    result.current.retry();
+                });
+            }
+
+            expect(result.current.retryCount).toBe(MAX_RETRIES);
+            expect(result.current.isRetryExhausted).toBe(true);
+            expect(result.current.isRetryAvailable).toBe(false);
+        });
+
+        it('should not increment retryCount beyond MAX_RETRIES', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            // Retry MAX_RETRIES times
+            for (let i = 0; i < MAX_RETRIES; i++) {
+                await act(async () => {
+                    result.current.retry();
+                });
+            }
+
+            // Try to retry again (should not work)
+            await act(async () => {
+                result.current.retry();
+            });
+
+            expect(result.current.retryCount).toBe(MAX_RETRIES);
+        });
+
+        it('should reset retryCount when reset() is called', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            await act(async () => {
+                result.current.retry();
+            });
+
+            expect(result.current.retryCount).toBe(1);
+
+            act(() => {
+                result.current.reset();
+            });
+
+            expect(result.current.retryCount).toBe(0);
+            expect(result.current.isRetryExhausted).toBe(false);
+        });
+
+        it('should reset retryCount when new prompt is generated', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse('<html>test</html>'));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            await act(async () => {
+                result.current.retry();
+            });
+
+            expect(result.current.retryCount).toBe(1);
+
+            // Generate with new prompt
+            await act(async () => {
+                await result.current.generate('castle');
+            });
+
+            expect(result.current.retryCount).toBe(0);
+        });
+
+        it('should have isRetryAvailable false during generation', async () => {
+            mockFetch.mockImplementation(() => new Promise(() => { })); // Never resolves
+            const { result } = renderHook(() => useTextToModel());
+
+            act(() => {
+                result.current.generate('dragon');
+            });
+
+            expect(result.current.status).toBe('generating');
+            expect(result.current.isRetryAvailable).toBe(false);
+        });
+
+        it('should have isRetryAvailable false after error', async () => {
+            mockFetch.mockResolvedValue(createMockErrorResponse('GENERATION_FAILED', 'Failed'));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            expect(result.current.status).toBe('error');
+            expect(result.current.isRetryAvailable).toBe(false);
         });
     });
 });

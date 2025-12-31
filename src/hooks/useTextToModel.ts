@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { LoadingPhase } from '@/types/loading';
+import { MAX_RETRIES } from '@/lib/constants';
 
 /**
  * Generation status state machine
@@ -43,10 +44,18 @@ export interface UseTextToModelReturn {
     errorCode: string | null;
     /** Start generation from prompt */
     generate: (prompt: string) => Promise<void>;
-    /** Reset to idle state */
+    /** Reset to idle state (clears retry count) */
     reset: () => void;
     /** Generation duration in ms (for NFR1 tracking) */
     duration: number | null;
+    /** Current retry count (0 = first attempt, 1 = first retry, etc.) */
+    retryCount: number;
+    /** Whether retry is available (success state and retries not exhausted) */
+    isRetryAvailable: boolean;
+    /** Whether retry limit has been reached */
+    isRetryExhausted: boolean;
+    /** Retry with the same prompt */
+    retry: () => void;
 }
 
 /**
@@ -75,11 +84,29 @@ export function useTextToModel(): UseTextToModelReturn {
     const [error, setError] = useState<string | null>(null);
     const [errorCode, setErrorCode] = useState<string | null>(null);
     const [duration, setDuration] = useState<number | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
 
     // Refs for cleanup
     const phaseTimersRef = useRef<NodeJS.Timeout[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
     const startTimeRef = useRef<number | null>(null);
+    // Store last prompt for retry capability
+    const lastPromptRef = useRef<string | null>(null);
+
+    /**
+     * Cleanup on unmount - abort any pending requests and clear timers
+     */
+    useEffect(() => {
+        return () => {
+            // Abort any in-progress request
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+            // Clear any pending phase timers
+            phaseTimersRef.current.forEach((timer) => clearTimeout(timer));
+            phaseTimersRef.current = [];
+        };
+    }, []);
 
     /**
      * Clear all phase transition timers
@@ -121,12 +148,21 @@ export function useTextToModel(): UseTextToModelReturn {
     }, []);
 
     /**
-     * Generate model from text prompt
+     * Internal generate function that handles both new prompts and retries
      */
-    const generate = useCallback(async (prompt: string): Promise<void> => {
+    const generateInternal = useCallback(async (prompt: string, isRetry: boolean): Promise<void> => {
         // Cancel any in-progress generation
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
+        }
+
+        // If this is a NEW prompt (not retry), reset counter and store prompt
+        if (!isRetry) {
+            setRetryCount(0);
+            lastPromptRef.current = prompt;
+        } else {
+            // For retries, increment the count
+            setRetryCount((prev) => prev + 1);
         }
 
         // Clear previous state
@@ -219,7 +255,25 @@ export function useTextToModel(): UseTextToModelReturn {
     }, [clearPhaseTimers, startPhaseTransitions, parseError]);
 
     /**
-     * Reset to idle state
+     * Generate model from text prompt (public API)
+     * Resets retry count for new prompts
+     */
+    const generate = useCallback(async (prompt: string): Promise<void> => {
+        await generateInternal(prompt, false);
+    }, [generateInternal]);
+
+    /**
+     * Retry with the same prompt
+     * Only works if a previous prompt was stored and retries are available
+     */
+    const retry = useCallback(() => {
+        if (lastPromptRef.current && retryCount < MAX_RETRIES) {
+            generateInternal(lastPromptRef.current, true);
+        }
+    }, [generateInternal, retryCount]);
+
+    /**
+     * Reset to idle state (clears retry count)
      */
     const reset = useCallback(() => {
         // Abort any in-progress request
@@ -234,8 +288,14 @@ export function useTextToModel(): UseTextToModelReturn {
         setError(null);
         setErrorCode(null);
         setDuration(null);
+        setRetryCount(0);
         startTimeRef.current = null;
+        lastPromptRef.current = null;
     }, [clearPhaseTimers]);
+
+    // Computed values for retry availability
+    const isRetryAvailable = status === 'success' && retryCount < MAX_RETRIES;
+    const isRetryExhausted = retryCount >= MAX_RETRIES;
 
     return {
         status,
@@ -246,5 +306,9 @@ export function useTextToModel(): UseTextToModelReturn {
         generate,
         reset,
         duration,
+        retryCount,
+        isRetryAvailable,
+        isRetryExhausted,
+        retry,
     };
 }
