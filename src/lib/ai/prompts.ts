@@ -492,21 +492,66 @@ YOUR TASK:
 `;
 
 /**
+ * Suffix instructing the AI to analyze structural stability and include results in HTML.
+ * The AI embeds a JSON analysis in an HTML comment that can be parsed client-side.
+ *
+ * @see Story 2.6: Add Structural Feedback for Generated Models
+ */
+export const STRUCTURAL_ANALYSIS_SUFFIX = `
+STRUCTURAL ANALYSIS REQUIREMENT:
+After generating the addBrick() calls, analyze the model for structural stability and include the analysis as an HTML comment.
+
+Evaluate the model for these issues:
+1. CANTILEVER: Bricks extending horizontally without support below (severity depends on length)
+2. FLOATING: Bricks placed with no connection to the structure (always critical)
+3. TOO_TALL: Height-to-base-width ratio exceeding 3:1 without internal support
+4. NARROW_BASE: Base width less than 1/3 of the model's maximum width
+5. UNBALANCED: Significant weight distributed to one side
+
+Output Format (REQUIRED - place immediately before </script>):
+<!-- STRUCTURAL_ANALYSIS: {"isStable":true|false,"issues":[{"type":"string","severity":"warning|critical","message":"string","suggestion":"string"}],"overallScore":0-100,"summary":"string"} -->
+
+Example for a stable model:
+<!-- STRUCTURAL_ANALYSIS: {"isStable":true,"issues":[],"overallScore":95,"summary":"Solid base, staggered joints, well-balanced structure."} -->
+
+Example for a model with issues:
+<!-- STRUCTURAL_ANALYSIS: {"isStable":false,"issues":[{"type":"cantilever","severity":"warning","message":"Wing extends 4 studs without support","suggestion":"Add pillar at stud position (5,0,2)"}],"overallScore":60,"summary":"Functional but wings may be fragile."} -->
+`;
+
+/**
+ * Suffix appended to prompt when user clicks "Regenerate for Stability".
+ * This instructs the AI to prioritize structural stability in the next generation.
+ *
+ * @see Story 2.6: Add Structural Feedback for Generated Models
+ */
+export const STABILITY_REGENERATION_SUFFIX =
+  ' Please make this model more structurally stable with a wider base, better support columns, and avoid overhangs.';
+
+/**
  * Returns the appropriate system prompt for text-to-LEGO generation.
  *
  * When isFirstBuild is true, the FIRST_BUILD_SUFFIX is appended to encourage
  * simpler, more buildable designs for first-time users.
  *
+ * Always includes STRUCTURAL_ANALYSIS_SUFFIX for buildability feedback.
+ *
  * @param isFirstBuild - Whether this is the user's first build (simple mode)
  * @returns The complete system prompt string
  *
  * @see Story 2.5: Implement First-Build Guarantee
+ * @see Story 2.6: Add Structural Feedback for Generated Models
  */
 export function getSystemPrompt(isFirstBuild: boolean): string {
+  let prompt = LEGO_GENERATION_SYSTEM_PROMPT;
+
   if (isFirstBuild) {
-    return LEGO_GENERATION_SYSTEM_PROMPT + '\n\n' + FIRST_BUILD_SUFFIX;
+    prompt += '\n\n' + FIRST_BUILD_SUFFIX;
   }
-  return LEGO_GENERATION_SYSTEM_PROMPT;
+
+  // Always add structural analysis requirement
+  prompt += '\n\n' + STRUCTURAL_ANALYSIS_SUFFIX;
+
+  return prompt;
 }
 
 /**
@@ -515,14 +560,24 @@ export function getSystemPrompt(isFirstBuild: boolean): string {
  * When isFirstBuild is true, the FIRST_BUILD_SUFFIX is appended to encourage
  * simpler, more buildable designs for first-time users.
  *
+ * Always includes STRUCTURAL_ANALYSIS_SUFFIX for buildability feedback.
+ *
  * @param isFirstBuild - Whether this is the user's first build (simple mode)
  * @returns The complete system prompt string
  *
  * @see Story 2.5: Implement First-Build Guarantee
+ * @see Story 2.6: Add Structural Feedback for Generated Models
  */
 export function getImageSystemPrompt(isFirstBuild: boolean): string {
+  let prompt = IMAGE_TO_LEGO_SYSTEM_PROMPT;
+
   if (isFirstBuild) {
-    return IMAGE_TO_LEGO_SYSTEM_PROMPT + '\n\n' + FIRST_BUILD_SUFFIX;
+    prompt += '\n\n' + FIRST_BUILD_SUFFIX;
   }
-  return IMAGE_TO_LEGO_SYSTEM_PROMPT;
+
+  // Always add structural analysis requirement
+  prompt += '\n\n' + STRUCTURAL_ANALYSIS_SUFFIX;
+
+  return prompt;
 }
+

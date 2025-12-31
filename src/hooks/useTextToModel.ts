@@ -3,6 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { LoadingPhase } from '@/types/loading';
 import { MAX_RETRIES } from '@/lib/constants';
+import { parseStructuralAnalysis } from '@/lib/ai/parse-structural-analysis';
+import type { StructuralAnalysisResult } from '@/lib/ai/structural-analysis';
 
 /**
  * Generation status state machine
@@ -56,6 +58,10 @@ export interface UseTextToModelReturn {
     isRetryExhausted: boolean;
     /** Retry with the same prompt */
     retry: () => void;
+    /** Structural analysis result from AI (Story 2.6) */
+    structuralAnalysis: StructuralAnalysisResult | null;
+    /** Last prompt used for generation (for stability regeneration) */
+    lastPrompt: string | null;
 }
 
 /**
@@ -85,6 +91,7 @@ export function useTextToModel(): UseTextToModelReturn {
     const [errorCode, setErrorCode] = useState<string | null>(null);
     const [duration, setDuration] = useState<number | null>(null);
     const [retryCount, setRetryCount] = useState(0);
+    const [structuralAnalysis, setStructuralAnalysis] = useState<StructuralAnalysisResult | null>(null);
 
     // Refs for cleanup
     const phaseTimersRef = useRef<NodeJS.Timeout[]>([]);
@@ -224,6 +231,10 @@ export function useTextToModel(): UseTextToModelReturn {
             // Clear phase timers before setting success state
             clearPhaseTimers();
 
+            // Parse structural analysis from AI response (Story 2.6)
+            const analysis = parseStructuralAnalysis(cleanHtml);
+            setStructuralAnalysis(analysis);
+
             // Success
             setGeneratedHtml(cleanHtml);
             setDuration(generationDuration);
@@ -293,6 +304,7 @@ export function useTextToModel(): UseTextToModelReturn {
         setErrorCode(null);
         setDuration(null);
         setRetryCount(0);
+        setStructuralAnalysis(null);
         startTimeRef.current = null;
         lastPromptRef.current = null;
     }, [clearPhaseTimers]);
@@ -314,5 +326,7 @@ export function useTextToModel(): UseTextToModelReturn {
         isRetryAvailable,
         isRetryExhausted,
         retry,
+        structuralAnalysis,
+        lastPrompt: lastPromptRef.current,
     };
 }

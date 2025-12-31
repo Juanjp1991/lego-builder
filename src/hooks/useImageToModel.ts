@@ -3,6 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { LoadingPhase } from '@/types/loading';
 import { MAX_RETRIES } from '@/lib/constants';
+import { parseStructuralAnalysis } from '@/lib/ai/parse-structural-analysis';
+import type { StructuralAnalysisResult } from '@/lib/ai/structural-analysis';
 
 /**
  * Generation status state machine
@@ -48,7 +50,7 @@ export interface UseImageToModelReturn {
     /** Error code for programmatic handling */
     errorCode: string | null;
     /** Start generation from image file */
-    generate: (file: File, isFirstBuild?: boolean) => Promise<void>;
+    generate: (file: File, isFirstBuild?: boolean, prompt?: string) => Promise<void>;
     /** Reset to idle state (clears retry count) */
     reset: () => void;
     /** Generation duration in ms (for NFR1 tracking) */
@@ -60,7 +62,9 @@ export interface UseImageToModelReturn {
     /** Whether retry limit has been reached */
     isRetryExhausted: boolean;
     /** Retry with the same image */
-    retry: () => void;
+    retry: (prompt?: string) => void;
+    /** Structural analysis result from AI (Story 2.6) */
+    structuralAnalysis: StructuralAnalysisResult | null;
 }
 
 /**
@@ -111,6 +115,7 @@ export function useImageToModel(): UseImageToModelReturn {
     const [errorCode, setErrorCode] = useState<string | null>(null);
     const [duration, setDuration] = useState<number | null>(null);
     const [retryCount, setRetryCount] = useState(0);
+    const [structuralAnalysis, setStructuralAnalysis] = useState<StructuralAnalysisResult | null>(null);
 
     // Refs for cleanup
     const phaseTimersRef = useRef<NodeJS.Timeout[]>([]);
@@ -177,7 +182,7 @@ export function useImageToModel(): UseImageToModelReturn {
     /**
      * Internal generate function that handles both new files and retries
      */
-    const generateInternal = useCallback(async (file: File, isFirstBuild: boolean, isRetry: boolean): Promise<void> => {
+    const generateInternal = useCallback(async (file: File, isFirstBuild: boolean, isRetry: boolean, customPrompt?: string): Promise<void> => {
         // Cancel any in-progress generation
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -223,7 +228,7 @@ export function useImageToModel(): UseImageToModelReturn {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    prompt: DEFAULT_IMAGE_PROMPT,
+                    prompt: customPrompt || DEFAULT_IMAGE_PROMPT,
                     imageData,
                     mimeType,
                     isFirstBuild,
@@ -264,6 +269,10 @@ export function useImageToModel(): UseImageToModelReturn {
             // Clear phase timers before setting success state
             clearPhaseTimers();
 
+            // Parse structural analysis from AI response (Story 2.6)
+            const analysis = parseStructuralAnalysis(cleanHtml);
+            setStructuralAnalysis(analysis);
+
             // Success
             setGeneratedHtml(cleanHtml);
             setDuration(generationDuration);
@@ -302,17 +311,17 @@ export function useImageToModel(): UseImageToModelReturn {
      * @param file - Image file to analyze
      * @param isFirstBuild - Whether to use simple mode (First-Build Guarantee)
      */
-    const generate = useCallback(async (file: File, isFirstBuild: boolean = false): Promise<void> => {
-        await generateInternal(file, isFirstBuild, false);
+    const generate = useCallback(async (file: File, isFirstBuild: boolean = false, prompt?: string): Promise<void> => {
+        await generateInternal(file, isFirstBuild, false, prompt);
     }, [generateInternal]);
 
     /**
      * Retry with the same image
      * Only works if a previous image was stored and retries are available
      */
-    const retry = useCallback(() => {
+    const retry = useCallback((prompt?: string) => {
         if (lastFileDataRef.current && retryCount < MAX_RETRIES) {
-            generateInternal(lastFileDataRef.current.file, lastIsFirstBuildRef.current, true);
+            generateInternal(lastFileDataRef.current.file, lastIsFirstBuildRef.current, true, prompt);
         }
     }, [generateInternal, retryCount]);
 
@@ -333,6 +342,7 @@ export function useImageToModel(): UseImageToModelReturn {
         setErrorCode(null);
         setDuration(null);
         setRetryCount(0);
+        setStructuralAnalysis(null);
         startTimeRef.current = null;
         lastFileDataRef.current = null;
     }, [clearPhaseTimers]);
@@ -354,5 +364,6 @@ export function useImageToModel(): UseImageToModelReturn {
         isRetryAvailable,
         isRetryExhausted,
         retry,
+        structuralAnalysis,
     };
 }

@@ -552,4 +552,119 @@ describe('useTextToModel', () => {
             expect(result.current.isRetryAvailable).toBe(false);
         });
     });
+
+    describe('Structural Analysis (Story 2.6)', () => {
+        const STABLE_HTML_WITH_ANALYSIS = `<html>
+<body>
+<script>
+addBrick(2, 4, 0, 0, 0, 0xff0000);
+<!-- STRUCTURAL_ANALYSIS: {"isStable":true,"issues":[],"overallScore":95,"summary":"Solid base, well-balanced."} -->
+</script>
+</body>
+</html>`;
+
+        const UNSTABLE_HTML_WITH_ANALYSIS = `<html>
+<body>
+<script>
+addBrick(2, 4, 0, 0, 0, 0xff0000);
+<!-- STRUCTURAL_ANALYSIS: {"isStable":false,"issues":[{"type":"cantilever","severity":"warning","message":"Wing extends too far","suggestion":"Add support"}],"overallScore":45,"summary":"Needs support."} -->
+</script>
+</body>
+</html>`;
+
+        const HTML_WITHOUT_ANALYSIS = '<html><body><script>addBrick(2, 4, 0, 0, 0, 0xff0000);</script></body></html>';
+
+        it('should have null structuralAnalysis initially', () => {
+            const { result } = renderHook(() => useTextToModel());
+
+            expect(result.current.structuralAnalysis).toBeNull();
+        });
+
+        it('should parse stable structural analysis from response', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse(STABLE_HTML_WITH_ANALYSIS));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            expect(result.current.structuralAnalysis).not.toBeNull();
+            expect(result.current.structuralAnalysis?.isStable).toBe(true);
+            expect(result.current.structuralAnalysis?.overallScore).toBe(95);
+            expect(result.current.structuralAnalysis?.issues).toHaveLength(0);
+        });
+
+        it('should parse unstable structural analysis from response', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse(UNSTABLE_HTML_WITH_ANALYSIS));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            expect(result.current.structuralAnalysis).not.toBeNull();
+            expect(result.current.structuralAnalysis?.isStable).toBe(false);
+            expect(result.current.structuralAnalysis?.overallScore).toBe(45);
+            expect(result.current.structuralAnalysis?.issues).toHaveLength(1);
+            expect(result.current.structuralAnalysis?.issues[0].type).toBe('cantilever');
+        });
+
+        it('should have null structuralAnalysis when response has no analysis', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse(HTML_WITHOUT_ANALYSIS));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            expect(result.current.structuralAnalysis).toBeNull();
+        });
+
+        it('should clear structuralAnalysis on reset', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse(STABLE_HTML_WITH_ANALYSIS));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            expect(result.current.structuralAnalysis).not.toBeNull();
+
+            act(() => {
+                result.current.reset();
+            });
+
+            expect(result.current.structuralAnalysis).toBeNull();
+        });
+
+        it('should expose lastPrompt for stability regeneration', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse(STABLE_HTML_WITH_ANALYSIS));
+            const { result } = renderHook(() => useTextToModel());
+
+            expect(result.current.lastPrompt).toBeNull();
+
+            await act(async () => {
+                await result.current.generate('my dragon');
+            });
+
+            expect(result.current.lastPrompt).toBe('my dragon');
+        });
+
+        it('should update lastPrompt when generating with new prompt', async () => {
+            mockFetch.mockResolvedValue(createMockStreamResponse(STABLE_HTML_WITH_ANALYSIS));
+            const { result } = renderHook(() => useTextToModel());
+
+            await act(async () => {
+                await result.current.generate('dragon');
+            });
+
+            expect(result.current.lastPrompt).toBe('dragon');
+
+            await act(async () => {
+                await result.current.generate('castle');
+            });
+
+            expect(result.current.lastPrompt).toBe('castle');
+        });
+    });
 });

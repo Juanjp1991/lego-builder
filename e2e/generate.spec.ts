@@ -1098,3 +1098,150 @@ test.describe('Create Page - First-Build Guarantee', () => {
         await expect(badge).toBeVisible();
     });
 });
+
+/**
+ * E2E Tests for Structural Feedback
+ * @see Story 2.6: Add Structural Feedback for Generated Models
+ */
+
+const mockStableAnalysis = '<!-- STRUCTURAL_ANALYSIS: {"isStable":true,"issues":[],"overallScore":95,"summary":"Solid base."} -->';
+const mockUnstableAnalysis = '<!-- STRUCTURAL_ANALYSIS: {"isStable":false,"issues":[{"type":"cantilever","severity":"warning","message":"Overhang too long","suggestion":"Add support"}],"overallScore":45,"summary":"Stability issues."} -->';
+
+const mockStableHtml = `<html><body><div id="scene">🧱 Stable Castle</div><script>window.parent.postMessage({ type: 'ready' }, '*');</script>${mockStableAnalysis}</body></html>`;
+const mockUnstableHtml = `<html><body><div id="scene">🧱 Unstable Bridge</div><script>window.parent.postMessage({ type: 'ready' }, '*');</script>${mockUnstableAnalysis}</body></html>`;
+
+test.describe('Create Page - Structural Feedback', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/create');
+    });
+
+    test('should show success feedback for stable models', async ({ page }) => {
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockStableHtml,
+            });
+        });
+
+        await page.getByTestId('prompt-input').fill('stable castle');
+        await page.getByTestId('submit-button').click();
+
+        const feedback = page.getByTestId('structural-feedback');
+        await expect(feedback).toBeVisible({ timeout: 10000 });
+        await expect(feedback).toContainText('Looks stable!');
+        await expect(feedback).toContainText('95/100');
+        // Success styling (green)
+        await expect(feedback).toHaveClass(/bg-green-50/);
+
+        // Regenerate buttons should NOT be visible
+        await expect(page.getByTestId('regenerate-stability-button')).not.toBeVisible();
+    });
+
+    test('should show warning feedback and regeneration options for unstable models', async ({ page }) => {
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockUnstableHtml,
+            });
+        });
+
+        await page.getByTestId('prompt-input').fill('unstable bridge');
+        await page.getByTestId('submit-button').click();
+
+        const feedback = page.getByTestId('structural-feedback');
+        await expect(feedback).toBeVisible({ timeout: 10000 });
+        await expect(feedback).toContainText('Structural concerns detected');
+        await expect(feedback).toContainText('45/100');
+        await expect(feedback).toContainText('Overhang too long');
+
+        // Warning styling (destructive alert default)
+        await expect(feedback).toHaveClass(/bg-destructive/);
+
+        // Regenerate buttons SHOULD be visible
+        await expect(page.getByTestId('regenerate-stability-button')).toBeVisible();
+        await expect(page.getByTestId('build-anyway-button')).toBeVisible();
+    });
+
+    test('should hide feedback when clicking Build Anyway', async ({ page }) => {
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockUnstableHtml,
+            });
+        });
+
+        await page.getByTestId('prompt-input').fill('unstable bridge');
+        await page.getByTestId('submit-button').click();
+
+        await page.getByTestId('build-anyway-button').click();
+
+        // Feedback and regeneration prompt should disappear
+        await expect(page.getByTestId('structural-feedback')).not.toBeVisible();
+        await expect(page.getByTestId('regenerate-prompt-section')).not.toBeVisible();
+    });
+
+    test('should trigger new generation when clicking Regenerate for Stability', async ({ page }) => {
+        let callCount = 0;
+        await page.route('**/api/generate', async (route) => {
+            callCount++;
+            const postData = route.request().postData();
+            const payload = postData ? JSON.parse(postData) : {};
+
+            if (callCount === 2) {
+                // Second call should contain the stability suffix
+                expect(payload.prompt).toContain('Please make this model more structurally stable');
+            }
+
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: callCount === 1 ? mockUnstableHtml : mockStableHtml,
+            });
+        });
+
+        await page.getByTestId('prompt-input').fill('shaky bridge');
+        await page.getByTestId('submit-button').click();
+
+        // Wait for unstable result
+        await expect(feedback => page.getByTestId('regenerate-stability-button').isVisible()).toBeTruthy();
+
+        // Click regenerate
+        await page.getByTestId('regenerate-stability-button').click();
+
+        // Should show loading state
+        await expect(page.getByTestId('regenerate-stability-button')).toBeDisabled();
+        await expect(page.getByTestId('loading-spinner')).toBeVisible();
+
+        // Eventually should show the new stable feedback
+        const feedback = page.getByTestId('structural-feedback');
+        await expect(feedback).toBeVisible({ timeout: 15000 });
+        await expect(feedback).toContainText('Looks stable!');
+        expect(callCount).toBe(2);
+    });
+
+    test('should allow dismissing feedback via X button', async ({ page }) => {
+        await page.route('**/api/generate', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/plain; charset=utf-8',
+                body: mockStableHtml,
+            });
+        });
+
+        await page.getByTestId('prompt-input').fill('stable castle');
+        await page.getByTestId('submit-button').click();
+
+        // Wait for feedback
+        const feedback = page.getByTestId('structural-feedback');
+        await expect(feedback).toBeVisible({ timeout: 10000 });
+
+        // Click X
+        await page.getByTestId('dismiss-feedback-button').click();
+
+        await expect(feedback).not.toBeVisible();
+    });
+});
+

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTextToModel } from '@/hooks/useTextToModel';
 import { useImageToModel } from '@/hooks/useImageToModel';
 import { useFirstBuild } from '@/hooks/useFirstBuild';
@@ -11,9 +11,12 @@ import { RetryButton } from '@/components/create/RetryButton';
 import { TemplateSuggestions } from '@/components/create/TemplateSuggestions';
 import { FirstBuildBadge } from '@/components/create/FirstBuildBadge';
 import { AdvancedModeToggle } from '@/components/create/AdvancedModeToggle';
+import { StructuralFeedback } from '@/components/create/StructuralFeedback';
+import { RegeneratePrompt } from '@/components/create/RegeneratePrompt';
 import { ModelViewer } from '@/components/viewer/ModelViewer';
 import { cn } from '@/lib/utils';
 import { MAX_RETRIES } from '@/lib/constants';
+import { STABILITY_REGENERATION_SUFFIX } from '@/lib/ai/prompts';
 
 /**
  * Input mode for model generation
@@ -35,6 +38,9 @@ type InputMode = 'text' | 'image';
 export function CreateContent() {
     // Input mode state
     const [mode, setMode] = useState<InputMode>('text');
+
+    // Controls visibility of structural feedback (Story 2.6)
+    const [showStructuralFeedback, setShowStructuralFeedback] = useState(true);
 
     // Text-to-model generation state
     const textGeneration = useTextToModel();
@@ -65,7 +71,23 @@ export function CreateContent() {
         isRetryAvailable,
         isRetryExhausted,
         retry,
+        structuralAnalysis,
     } = activeGeneration;
+
+    // TRACK STRUCTURAL FEEDBACK SHOWN (Story 2.6)
+    useEffect(() => {
+        if (status === 'success' && structuralAnalysis && typeof window !== 'undefined' && (window as any).posthog) {
+            (window as any).posthog.capture('structural_feedback_shown', {
+                isStable: structuralAnalysis.isStable,
+                overallScore: structuralAnalysis.overallScore,
+                issueCount: structuralAnalysis.issues.length,
+                mode,
+            });
+        }
+    }, [status, structuralAnalysis, mode]);
+
+    // Hook-specific properties needed for stability regeneration
+    const lastPrompt = mode === 'text' ? textGeneration.lastPrompt : null;
 
     const isGenerating = status === 'generating';
     const hasResult = status === 'success' && generatedHtml;
@@ -76,6 +98,7 @@ export function CreateContent() {
      * Handle text prompt submission
      */
     const handleTextSubmit = async (prompt: string) => {
+        setShowStructuralFeedback(true); // Reset feedback visibility for new generation
         await textGeneration.generate(prompt, isFirstBuildMode);
     };
 
@@ -83,6 +106,7 @@ export function CreateContent() {
      * Handle image selection
      */
     const handleImageSelect = async (file: File) => {
+        setShowStructuralFeedback(true); // Reset feedback visibility for new generation
         await imageGeneration.generate(file, isFirstBuildMode);
     };
 
@@ -90,6 +114,7 @@ export function CreateContent() {
      * Handle retry from error state
      */
     const handleRetry = () => {
+        setShowStructuralFeedback(true);
         reset();
     };
 
@@ -106,8 +131,47 @@ export function CreateContent() {
      */
     const handleTemplateSelect = async (prompt: string) => {
         setMode('text'); // Switch to text mode first
+        setShowStructuralFeedback(true);
         reset(); // Reset to clear retry count
         await textGeneration.generate(prompt, isFirstBuildMode); // Generate with template prompt
+    };
+
+    /**
+     * Handle "Regenerate for Stability" action (Story 2.6)
+     */
+    const handleRegenerateForStability = async () => {
+        // Tracker (Story 2.6)
+        if (typeof window !== 'undefined' && (window as any).posthog) {
+            (window as any).posthog.capture('regenerate_for_stability_clicked', {
+                mode,
+                previousScore: structuralAnalysis?.overallScore,
+            });
+        }
+
+        setShowStructuralFeedback(true);
+        if (mode === 'text' && lastPrompt) {
+            await textGeneration.generate(
+                lastPrompt + STABILITY_REGENERATION_SUFFIX,
+                isFirstBuildMode
+            );
+        } else if (mode === 'image' && imageGeneration.status === 'success') {
+            // For image mode, we call retry with the stability prompt override
+            imageGeneration.retry(STABILITY_REGENERATION_SUFFIX);
+        }
+    };
+
+    /**
+     * Handle "Build Anyway" action - just hide the warnings (Story 2.6)
+     */
+    const handleProceedAnyway = () => {
+        // Tracker (Story 2.6)
+        if (typeof window !== 'undefined' && (window as any).posthog) {
+            (window as any).posthog.capture('build_anyway_clicked', {
+                score: structuralAnalysis?.overallScore,
+            });
+        }
+
+        setShowStructuralFeedback(false);
     };
 
     /**
@@ -268,11 +332,32 @@ export function CreateContent() {
                         </div>
                     )}
 
+                    {/* Structural Feedback Alert (Story 2.6) */}
+                    {showStructuralFeedback && structuralAnalysis && (
+                        <div className="space-y-4">
+                            <StructuralFeedback
+                                analysis={structuralAnalysis}
+                                onDismiss={() => setShowStructuralFeedback(false)}
+                            />
+
+                            {/* Regeneration Options for Unstable Models */}
+                            {!structuralAnalysis.isStable && (
+                                <RegeneratePrompt
+                                    onRegenerateForStability={handleRegenerateForStability}
+                                    onProceedAnyway={handleProceedAnyway}
+                                    isLoading={isGenerating}
+                                />
+                            )}
+                        </div>
+                    )}
+
                     {/* 3D Model Viewer */}
                     <ModelViewer
                         htmlScene={generatedHtml}
                         onError={() => {
-                            console.error('[CreateContent] ModelViewer error - scene may be invalid');
+                            console.error(
+                                '[CreateContent] ModelViewer error - scene may be invalid'
+                            );
                         }}
                     />
 
