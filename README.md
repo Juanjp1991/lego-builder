@@ -1,36 +1,119 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lego Builder
+
+An AI-powered web application that generates 3D Lego-style models from text descriptions or images using Google's Gemini AI.
+
+## Features
+
+- **Text-to-Lego**: Describe what you want to build and the AI generates a 3D Lego model
+- **Image-to-Lego**: Upload an image and the AI creates a Lego interpretation of it
+- **AI Model Selection**: Choose between two Gemini models:
+  - **Flash** (default): Fast generation using Gemini 2.5 Flash - optimized for speed and cost
+  - **Pro**: Higher quality output using Gemini 2.5 Pro - better for complex designs
+- **Interactive 3D Viewer**: Rotate, zoom, and explore your generated models
+- **Structural Analysis**: AI provides feedback on model stability and buildability
+- **First-Build Mode**: Simplified experience for first-time users
+- **Retry System**: Regenerate models if the first result isn't quite right
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Node.js 18+
+- A Google AI API key (Gemini)
+
+### Installation
+
+1. Clone the repository and navigate to the lego-builder directory:
+   ```bash
+   cd lego-builder
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Set up environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+   Edit `.env.local` and add your Gemini API key:
+   ```
+   GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
+   ```
+
+4. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+## Usage
+
+### Creating a Lego Model
+
+1. Navigate to the **Create** page
+2. Choose your input mode:
+   - **Text**: Type a description (e.g., "a red dragon", "a medieval castle")
+   - **Image**: Upload a reference image
+3. Select your AI model:
+   - **Flash**: Faster, good for simple models
+   - **Pro**: Slower but higher quality, better for detailed models
+4. Submit and watch your model generate
+5. Interact with the 3D viewer to explore your creation
+
+### AI Model Comparison
+
+| Model | Speed | Quality | Best For |
+|-------|-------|---------|----------|
+| Flash | ~10-20s | Good | Quick iterations, simple objects |
+| Pro | ~30-60s | Higher | Complex scenes, detailed models |
+
+## Project Structure
+
+```
+lego-builder/
+├── src/
+│   ├── app/              # Next.js app router pages
+│   │   ├── api/          # API routes (Gemini proxy)
+│   │   └── create/       # Create page
+│   ├── components/       # React components
+│   │   ├── create/       # Creation flow components
+│   │   ├── viewer/       # 3D model viewer
+│   │   └── ui/           # Shared UI components
+│   ├── hooks/            # Custom React hooks
+│   └── lib/              # Utilities and AI configuration
+│       └── ai/           # AI provider, prompts, types
+├── public/               # Static assets
+└── docs/                 # Documentation
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `npm run dev` - Start development server with Turbopack
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+- `npm run test` - Run unit tests (Vitest)
+- `npm run test:e2e` - Run end-to-end tests (Playwright)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tech Stack
 
-## Learn More
+- **Framework**: Next.js 16 with App Router
+- **AI**: Vercel AI SDK + Google Gemini (2.5 Flash & Pro)
+- **Styling**: Tailwind CSS
+- **3D Rendering**: Three.js (via generated HTML scenes)
+- **Testing**: Vitest + Playwright
+- **Language**: TypeScript
 
-To learn more about Next.js, take a look at the following resources:
+## Environment Variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Your Gemini API key | Yes |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## License
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT

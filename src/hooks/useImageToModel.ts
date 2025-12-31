@@ -3,8 +3,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { LoadingPhase } from '@/types/loading';
 import { MAX_RETRIES } from '@/lib/constants';
-import { parseStructuralAnalysis } from '@/lib/ai/parse-structural-analysis';
+import {
+    parseStructuralAnalysis,
+    extractCleanHtml,
+} from '@/lib/ai/parse-structural-analysis';
 import type { StructuralAnalysisResult } from '@/lib/ai/structural-analysis';
+import type { AIModel } from '@/lib/ai/types';
 
 /**
  * Generation status state machine
@@ -50,7 +54,7 @@ export interface UseImageToModelReturn {
     /** Error code for programmatic handling */
     errorCode: string | null;
     /** Start generation from image file */
-    generate: (file: File, isFirstBuild?: boolean, prompt?: string) => Promise<void>;
+    generate: (file: File, isFirstBuild?: boolean, prompt?: string, model?: AIModel) => Promise<void>;
     /** Reset to idle state (clears retry count) */
     reset: () => void;
     /** Generation duration in ms (for NFR1 tracking) */
@@ -124,6 +128,7 @@ export function useImageToModel(): UseImageToModelReturn {
     // Store last file data and first-build state for retry capability
     const lastFileDataRef = useRef<{ file: File; base64: string; mimeType: string } | null>(null);
     const lastIsFirstBuildRef = useRef<boolean>(false);
+    const lastModelRef = useRef<AIModel>('flash');
 
     /**
      * Cleanup on unmount - abort any pending requests and clear timers
@@ -182,7 +187,7 @@ export function useImageToModel(): UseImageToModelReturn {
     /**
      * Internal generate function that handles both new files and retries
      */
-    const generateInternal = useCallback(async (file: File, isFirstBuild: boolean, isRetry: boolean, customPrompt?: string): Promise<void> => {
+    const generateInternal = useCallback(async (file: File, isFirstBuild: boolean, isRetry: boolean, customPrompt?: string, model: AIModel = 'flash'): Promise<void> => {
         // Cancel any in-progress generation
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -222,6 +227,7 @@ export function useImageToModel(): UseImageToModelReturn {
                 setRetryCount(0);
                 lastFileDataRef.current = { file, base64: imageData, mimeType };
                 lastIsFirstBuildRef.current = isFirstBuild;
+                lastModelRef.current = model;
             }
 
             const response = await fetch('/api/generate', {
@@ -232,6 +238,7 @@ export function useImageToModel(): UseImageToModelReturn {
                     imageData,
                     mimeType,
                     isFirstBuild,
+                    model: isRetry ? lastModelRef.current : model,
                 }),
                 signal: abortControllerRef.current.signal,
             });
@@ -273,8 +280,11 @@ export function useImageToModel(): UseImageToModelReturn {
             const analysis = parseStructuralAnalysis(cleanHtml);
             setStructuralAnalysis(analysis);
 
+            // Strip analysis comment for rendering to avoid script errors
+            const finalHtml = extractCleanHtml(cleanHtml);
+
             // Success
-            setGeneratedHtml(cleanHtml);
+            setGeneratedHtml(finalHtml);
             setDuration(generationDuration);
             setStatus('success');
             setPhase(null);
@@ -310,9 +320,11 @@ export function useImageToModel(): UseImageToModelReturn {
      * Resets retry count for new files
      * @param file - Image file to analyze
      * @param isFirstBuild - Whether to use simple mode (First-Build Guarantee)
+     * @param prompt - Optional custom prompt
+     * @param model - Which AI model to use (flash or pro)
      */
-    const generate = useCallback(async (file: File, isFirstBuild: boolean = false, prompt?: string): Promise<void> => {
-        await generateInternal(file, isFirstBuild, false, prompt);
+    const generate = useCallback(async (file: File, isFirstBuild: boolean = false, prompt?: string, model: AIModel = 'flash'): Promise<void> => {
+        await generateInternal(file, isFirstBuild, false, prompt, model);
     }, [generateInternal]);
 
     /**

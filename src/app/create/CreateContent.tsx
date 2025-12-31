@@ -17,6 +17,7 @@ import { ModelViewer } from '@/components/viewer/ModelViewer';
 import { cn } from '@/lib/utils';
 import { MAX_RETRIES } from '@/lib/constants';
 import { STABILITY_REGENERATION_SUFFIX } from '@/lib/ai/prompts';
+import type { AIModel } from '@/lib/ai/types';
 
 /**
  * Input mode for model generation
@@ -38,6 +39,9 @@ type InputMode = 'text' | 'image';
 export function CreateContent() {
     // Input mode state
     const [mode, setMode] = useState<InputMode>('text');
+
+    // AI model selection state
+    const [selectedModel, setSelectedModel] = useState<AIModel>('flash');
 
     // Controls visibility of structural feedback (Story 2.6)
     const [showStructuralFeedback, setShowStructuralFeedback] = useState(true);
@@ -99,7 +103,7 @@ export function CreateContent() {
      */
     const handleTextSubmit = async (prompt: string) => {
         setShowStructuralFeedback(true); // Reset feedback visibility for new generation
-        await textGeneration.generate(prompt, isFirstBuildMode);
+        await textGeneration.generate(prompt, isFirstBuildMode, selectedModel);
     };
 
     /**
@@ -107,7 +111,7 @@ export function CreateContent() {
      */
     const handleImageSelect = async (file: File) => {
         setShowStructuralFeedback(true); // Reset feedback visibility for new generation
-        await imageGeneration.generate(file, isFirstBuildMode);
+        await imageGeneration.generate(file, isFirstBuildMode, undefined, selectedModel);
     };
 
     /**
@@ -133,7 +137,7 @@ export function CreateContent() {
         setMode('text'); // Switch to text mode first
         setShowStructuralFeedback(true);
         reset(); // Reset to clear retry count
-        await textGeneration.generate(prompt, isFirstBuildMode); // Generate with template prompt
+        await textGeneration.generate(prompt, isFirstBuildMode, selectedModel); // Generate with template prompt
     };
 
     /**
@@ -152,7 +156,8 @@ export function CreateContent() {
         if (mode === 'text' && lastPrompt) {
             await textGeneration.generate(
                 lastPrompt + STABILITY_REGENERATION_SUFFIX,
-                isFirstBuildMode
+                isFirstBuildMode,
+                selectedModel
             );
         } else if (mode === 'image' && imageGeneration.status === 'success') {
             // For image mode, we call retry with the stability prompt override
@@ -202,37 +207,76 @@ export function CreateContent() {
                         />
                     )}
 
-                    <div className="inline-flex rounded-lg border border-border p-1 bg-muted/30">
-                        <button
-                            type="button"
-                            onClick={() => handleModeSwitch('text')}
-                            className={cn(
-                                'px-4 py-2 text-sm font-medium rounded-md transition-colors',
-                                'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
-                                mode === 'text'
-                                    ? 'bg-primary text-primary-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground'
-                            )}
-                            data-testid="mode-text-button"
-                            aria-pressed={mode === 'text'}
-                        >
-                            Text
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => handleModeSwitch('image')}
-                            className={cn(
-                                'px-4 py-2 text-sm font-medium rounded-md transition-colors',
-                                'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
-                                mode === 'image'
-                                    ? 'bg-primary text-primary-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground'
-                            )}
-                            data-testid="mode-image-button"
-                            aria-pressed={mode === 'image'}
-                        >
-                            Image
-                        </button>
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                        {/* Input Mode Toggle */}
+                        <div className="inline-flex rounded-lg border border-border p-1 bg-muted/30">
+                            <button
+                                type="button"
+                                onClick={() => handleModeSwitch('text')}
+                                className={cn(
+                                    'px-4 py-2 text-sm font-medium rounded-md transition-colors',
+                                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
+                                    mode === 'text'
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )}
+                                data-testid="mode-text-button"
+                                aria-pressed={mode === 'text'}
+                            >
+                                Text
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleModeSwitch('image')}
+                                className={cn(
+                                    'px-4 py-2 text-sm font-medium rounded-md transition-colors',
+                                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
+                                    mode === 'image'
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )}
+                                data-testid="mode-image-button"
+                                aria-pressed={mode === 'image'}
+                            >
+                                Image
+                            </button>
+                        </div>
+
+                        {/* AI Model Toggle */}
+                        <div className="inline-flex rounded-lg border border-border p-1 bg-muted/30">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedModel('flash')}
+                                className={cn(
+                                    'px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
+                                    selectedModel === 'flash'
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )}
+                                data-testid="model-flash-button"
+                                aria-pressed={selectedModel === 'flash'}
+                                title="Fast generation (Gemini 2.5 Flash)"
+                            >
+                                ⚡ Flash
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedModel('pro')}
+                                className={cn(
+                                    'px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
+                                    selectedModel === 'pro'
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )}
+                                data-testid="model-pro-button"
+                                aria-pressed={selectedModel === 'pro'}
+                                title="Higher quality (Gemini 2.5 Pro)"
+                            >
+                                ✨ Pro
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

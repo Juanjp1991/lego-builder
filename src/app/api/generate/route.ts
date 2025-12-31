@@ -8,8 +8,9 @@
  */
 
 import { streamText } from 'ai';
-import { geminiFlash } from '@/lib/ai/provider';
+import { geminiFlash, geminiPro } from '@/lib/ai/provider';
 import { getSystemPrompt, getImageSystemPrompt } from '@/lib/ai/prompts';
+import type { AIModel } from '@/lib/ai/types';
 import {
   checkRateLimit,
   getClientIP,
@@ -135,8 +136,11 @@ export async function POST(req: Request): Promise<Response> {
       return validationError;
     }
 
-    const { prompt, imageData, mimeType, isFirstBuild = false } = body as GenerateRequestBody;
+    const { prompt, imageData, mimeType, isFirstBuild = false, model = 'flash' } = body as GenerateRequestBody;
     const trimmedPrompt = prompt.trim();
+
+    // Select the AI model based on the request
+    const selectedModel = model === 'pro' ? geminiPro : geminiFlash;
 
     // Validate image data if provided
     if (imageData) {
@@ -185,13 +189,17 @@ export async function POST(req: Request): Promise<Response> {
 
     // Use appropriate prompt based on generation type and first-build mode
     // Story 2.5: First-Build Guarantee - use simpler prompts for first-time users
-    const systemPrompt = isImageGeneration
-      ? getImageSystemPrompt(isFirstBuild)
-      : getSystemPrompt(isFirstBuild);
+    // Now includes category detection for specialized building guidelines
+    const { systemPrompt, category } = isImageGeneration
+      ? getImageSystemPrompt(isFirstBuild, trimmedPrompt)
+      : getSystemPrompt(isFirstBuild, trimmedPrompt);
+
+    // Log detected category for analytics/debugging
+    console.log(`[generate] Detected category: ${category}`);
 
     // Generate with streaming using Vercel AI SDK
     const result = await streamText({
-      model: geminiFlash,
+      model: selectedModel,
       system: systemPrompt,
       messages,
     });

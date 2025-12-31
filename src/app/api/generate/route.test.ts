@@ -288,7 +288,8 @@ describe('/api/generate', () => {
 
       expect(streamText).toHaveBeenCalledWith(
         expect.objectContaining({
-          system: expect.not.stringContaining('50 bricks'),
+          // First-build suffix contains "beginner-friendly" - should not appear in standard mode
+          system: expect.not.stringContaining('beginner-friendly'),
         })
       );
     });
@@ -300,7 +301,8 @@ describe('/api/generate', () => {
 
       expect(streamText).toHaveBeenCalledWith(
         expect.objectContaining({
-          system: expect.not.stringContaining('50 bricks'),
+          // First-build suffix contains "beginner-friendly" - should not appear by default
+          system: expect.not.stringContaining('beginner-friendly'),
         })
       );
     });

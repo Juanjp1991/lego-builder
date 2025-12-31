@@ -3,8 +3,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { LoadingPhase } from '@/types/loading';
 import { MAX_RETRIES } from '@/lib/constants';
-import { parseStructuralAnalysis } from '@/lib/ai/parse-structural-analysis';
+import {
+    parseStructuralAnalysis,
+    extractCleanHtml,
+} from '@/lib/ai/parse-structural-analysis';
 import type { StructuralAnalysisResult } from '@/lib/ai/structural-analysis';
+import type { AIModel } from '@/lib/ai/types';
 
 /**
  * Generation status state machine
@@ -45,7 +49,7 @@ export interface UseTextToModelReturn {
     /** Error code for programmatic handling */
     errorCode: string | null;
     /** Start generation from prompt */
-    generate: (prompt: string, isFirstBuild?: boolean) => Promise<void>;
+    generate: (prompt: string, isFirstBuild?: boolean, model?: AIModel) => Promise<void>;
     /** Reset to idle state (clears retry count) */
     reset: () => void;
     /** Generation duration in ms (for NFR1 tracking) */
@@ -100,6 +104,7 @@ export function useTextToModel(): UseTextToModelReturn {
     // Store last prompt and first-build state for retry capability
     const lastPromptRef = useRef<string | null>(null);
     const lastIsFirstBuildRef = useRef<boolean>(false);
+    const lastModelRef = useRef<AIModel>('flash');
 
     /**
      * Cleanup on unmount - abort any pending requests and clear timers
@@ -158,7 +163,7 @@ export function useTextToModel(): UseTextToModelReturn {
     /**
      * Internal generate function that handles both new prompts and retries
      */
-    const generateInternal = useCallback(async (prompt: string, isFirstBuild: boolean, isRetry: boolean): Promise<void> => {
+    const generateInternal = useCallback(async (prompt: string, isFirstBuild: boolean, isRetry: boolean, model: AIModel = 'flash'): Promise<void> => {
         // Cancel any in-progress generation
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -169,6 +174,7 @@ export function useTextToModel(): UseTextToModelReturn {
             setRetryCount(0);
             lastPromptRef.current = prompt;
             lastIsFirstBuildRef.current = isFirstBuild;
+            lastModelRef.current = model;
         } else {
             // For retries, increment the count
             setRetryCount((prev) => prev + 1);
@@ -193,7 +199,7 @@ export function useTextToModel(): UseTextToModelReturn {
             const response = await fetch('/api/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, isFirstBuild }),
+                body: JSON.stringify({ prompt, isFirstBuild, model }),
                 signal: abortControllerRef.current.signal,
             });
 
@@ -235,8 +241,11 @@ export function useTextToModel(): UseTextToModelReturn {
             const analysis = parseStructuralAnalysis(cleanHtml);
             setStructuralAnalysis(analysis);
 
+            // Strip analysis comment for rendering to avoid script errors
+            const finalHtml = extractCleanHtml(cleanHtml);
+
             // Success
-            setGeneratedHtml(cleanHtml);
+            setGeneratedHtml(finalHtml);
             setDuration(generationDuration);
             setStatus('success');
             setPhase(null);
@@ -272,9 +281,10 @@ export function useTextToModel(): UseTextToModelReturn {
      * Resets retry count for new prompts
      * @param prompt - Text description of what to build
      * @param isFirstBuild - Whether to use simple mode (First-Build Guarantee)
+     * @param model - Which AI model to use (flash or pro)
      */
-    const generate = useCallback(async (prompt: string, isFirstBuild: boolean = false): Promise<void> => {
-        await generateInternal(prompt, isFirstBuild, false);
+    const generate = useCallback(async (prompt: string, isFirstBuild: boolean = false, model: AIModel = 'flash'): Promise<void> => {
+        await generateInternal(prompt, isFirstBuild, false, model);
     }, [generateInternal]);
 
     /**
@@ -283,7 +293,7 @@ export function useTextToModel(): UseTextToModelReturn {
      */
     const retry = useCallback(() => {
         if (lastPromptRef.current && retryCount < MAX_RETRIES) {
-            generateInternal(lastPromptRef.current, lastIsFirstBuildRef.current, true);
+            generateInternal(lastPromptRef.current, lastIsFirstBuildRef.current, true, lastModelRef.current);
         }
     }, [generateInternal, retryCount]);
 

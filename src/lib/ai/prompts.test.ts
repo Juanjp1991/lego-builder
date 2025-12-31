@@ -7,6 +7,7 @@ import {
   STABILITY_REGENERATION_SUFFIX,
   getSystemPrompt,
   getImageSystemPrompt,
+  type SystemPromptOptions,
 } from './prompts';
 
 describe('AI Prompts', () => {
@@ -32,8 +33,8 @@ describe('AI Prompts', () => {
       expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('function addBrick');
     });
 
-    it('instructs to loop/call addBrick repeatedly', () => {
-      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('specific addBrick() calls');
+    it('instructs to add addBrick calls in BUILD section', () => {
+      expect(LEGO_GENERATION_SYSTEM_PROMPT).toContain('addBrick() calls');
     });
 
     it('enforces strict integer alignment', () => {
@@ -51,8 +52,8 @@ describe('AI Prompts', () => {
       expect(FIRST_BUILD_SUFFIX.length).toBeGreaterThan(0);
     });
 
-    it('limits brick count for beginners', () => {
-      expect(FIRST_BUILD_SUFFIX).toContain('50 bricks');
+    it('emphasizes standard brick sizes for beginners', () => {
+      expect(FIRST_BUILD_SUFFIX).toContain('standard brick sizes');
     });
 
     it('emphasizes simplicity', () => {
@@ -85,12 +86,12 @@ describe('AI Prompts', () => {
       expect(STRUCTURAL_ANALYSIS_SUFFIX).toContain('summary');
     });
 
-    it('provides example for stable model', () => {
-      expect(STRUCTURAL_ANALYSIS_SUFFIX).toContain('"isStable":true');
+    it('defines isStable field in format', () => {
+      expect(STRUCTURAL_ANALYSIS_SUFFIX).toContain('isStable');
     });
 
-    it('provides example for unstable model', () => {
-      expect(STRUCTURAL_ANALYSIS_SUFFIX).toContain('"isStable":false');
+    it('defines severity levels', () => {
+      expect(STRUCTURAL_ANALYSIS_SUFFIX).toContain('warning|critical');
     });
   });
 
@@ -123,8 +124,8 @@ describe('AI Prompts', () => {
       expect(IMAGE_TO_LEGO_SYSTEM_PROMPT.toLowerCase()).toContain('image');
     });
 
-    it('contains analysis instructions', () => {
-      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('ANALYSIS INSTRUCTIONS');
+    it('contains image analysis section', () => {
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('IMAGE ANALYSIS');
     });
 
     it('contains HTML doctype declaration', () => {
@@ -150,71 +151,121 @@ describe('AI Prompts', () => {
 
   describe('getSystemPrompt', () => {
     it('always includes structural analysis suffix', () => {
-      const prompt = getSystemPrompt(false);
-      expect(prompt).toContain(STRUCTURAL_ANALYSIS_SUFFIX);
+      const { systemPrompt } = getSystemPrompt(false);
+      expect(systemPrompt).toContain(STRUCTURAL_ANALYSIS_SUFFIX);
     });
 
     it('returns prompt with FIRST_BUILD_SUFFIX when isFirstBuild is true', () => {
-      const prompt = getSystemPrompt(true);
-      expect(prompt).toContain(LEGO_GENERATION_SYSTEM_PROMPT);
-      expect(prompt).toContain(FIRST_BUILD_SUFFIX);
-      expect(prompt).toContain(STRUCTURAL_ANALYSIS_SUFFIX);
+      const { systemPrompt } = getSystemPrompt(true);
+      expect(systemPrompt).toContain(LEGO_GENERATION_SYSTEM_PROMPT);
+      expect(systemPrompt).toContain(FIRST_BUILD_SUFFIX);
+      expect(systemPrompt).toContain(STRUCTURAL_ANALYSIS_SUFFIX);
     });
 
     it('first-build prompt is longer than standard prompt', () => {
-      const standardPrompt = getSystemPrompt(false);
-      const firstBuildPrompt = getSystemPrompt(true);
+      const { systemPrompt: standardPrompt } = getSystemPrompt(false);
+      const { systemPrompt: firstBuildPrompt } = getSystemPrompt(true);
       expect(firstBuildPrompt.length).toBeGreaterThan(standardPrompt.length);
     });
 
     it('first-build prompt mentions simplicity', () => {
-      const prompt = getSystemPrompt(true);
-      expect(prompt.toLowerCase()).toContain('simple');
+      const { systemPrompt } = getSystemPrompt(true);
+      expect(systemPrompt.toLowerCase()).toContain('simple');
     });
 
-    it('first-build prompt mentions brick limit', () => {
-      const prompt = getSystemPrompt(true);
-      expect(prompt).toContain('50 bricks');
+    it('first-build prompt mentions standard brick sizes', () => {
+      const { systemPrompt } = getSystemPrompt(true);
+      expect(systemPrompt).toContain('standard brick sizes');
     });
 
     it('includes STRUCTURAL_ANALYSIS marker in all modes', () => {
-      expect(getSystemPrompt(false)).toContain('STRUCTURAL_ANALYSIS');
-      expect(getSystemPrompt(true)).toContain('STRUCTURAL_ANALYSIS');
+      expect(getSystemPrompt(false).systemPrompt).toContain('STRUCTURAL_ANALYSIS');
+      expect(getSystemPrompt(true).systemPrompt).toContain('STRUCTURAL_ANALYSIS');
+    });
+
+    it('returns category from prompt detection', () => {
+      const { category: vehicleCategory } = getSystemPrompt(false, 'build a car');
+      expect(vehicleCategory).toBe('vehicles');
+
+      const { category: generalCategory } = getSystemPrompt(false);
+      expect(generalCategory).toBe('general');
+    });
+
+    it('includes category-specific guidelines when prompt provided', () => {
+      const { systemPrompt } = getSystemPrompt(false, 'build a car');
+      expect(systemPrompt).toContain('WHEEL');
+      expect(systemPrompt).toContain('BRICKS:');
+    });
+
+    it('supports options object with targetBrickCount', () => {
+      const opts: SystemPromptOptions = {
+        isFirstBuild: false,
+        userPrompt: 'build a house',
+        targetBrickCount: 100,
+      };
+      const { systemPrompt } = getSystemPrompt(opts);
+      expect(systemPrompt).toContain('Target ~100 bricks');
+      expect(systemPrompt).toContain('90 to 110 acceptable');
+    });
+
+    it('uses targetBrickCount instead of category minimum when specified', () => {
+      const opts: SystemPromptOptions = {
+        isFirstBuild: false,
+        userPrompt: 'build a car',
+        targetBrickCount: 75,
+      };
+      const { systemPrompt } = getSystemPrompt(opts);
+      expect(systemPrompt).toContain('Target ~75 bricks');
+      expect(systemPrompt).not.toContain('Use at least');
+    });
+
+    it('works with targetBrickCount and no userPrompt', () => {
+      const opts: SystemPromptOptions = {
+        isFirstBuild: false,
+        targetBrickCount: 50,
+      };
+      const { systemPrompt } = getSystemPrompt(opts);
+      expect(systemPrompt).toContain('Target ~50 bricks');
     });
   });
 
   describe('getImageSystemPrompt', () => {
     it('always includes structural analysis suffix', () => {
-      const prompt = getImageSystemPrompt(false);
-      expect(prompt).toContain(STRUCTURAL_ANALYSIS_SUFFIX);
+      const { systemPrompt } = getImageSystemPrompt(false);
+      expect(systemPrompt).toContain(STRUCTURAL_ANALYSIS_SUFFIX);
     });
 
     it('returns prompt with FIRST_BUILD_SUFFIX when isFirstBuild is true', () => {
-      const prompt = getImageSystemPrompt(true);
-      expect(prompt).toContain(IMAGE_TO_LEGO_SYSTEM_PROMPT);
-      expect(prompt).toContain(FIRST_BUILD_SUFFIX);
-      expect(prompt).toContain(STRUCTURAL_ANALYSIS_SUFFIX);
+      const { systemPrompt } = getImageSystemPrompt(true);
+      expect(systemPrompt).toContain(IMAGE_TO_LEGO_SYSTEM_PROMPT);
+      expect(systemPrompt).toContain(FIRST_BUILD_SUFFIX);
+      expect(systemPrompt).toContain(STRUCTURAL_ANALYSIS_SUFFIX);
     });
 
     it('first-build prompt is longer than standard prompt', () => {
-      const standardPrompt = getImageSystemPrompt(false);
-      const firstBuildPrompt = getImageSystemPrompt(true);
+      const { systemPrompt: standardPrompt } = getImageSystemPrompt(false);
+      const { systemPrompt: firstBuildPrompt } = getImageSystemPrompt(true);
       expect(firstBuildPrompt.length).toBeGreaterThan(standardPrompt.length);
     });
 
     it('first-build prompt mentions simplicity', () => {
-      const prompt = getImageSystemPrompt(true);
-      expect(prompt.toLowerCase()).toContain('simple');
+      const { systemPrompt } = getImageSystemPrompt(true);
+      expect(systemPrompt.toLowerCase()).toContain('simple');
     });
 
-    it('first-build prompt mentions brick limit', () => {
-      const prompt = getImageSystemPrompt(true);
-      expect(prompt).toContain('50 bricks');
+    it('first-build prompt mentions standard brick sizes', () => {
+      const { systemPrompt } = getImageSystemPrompt(true);
+      expect(systemPrompt).toContain('standard brick sizes');
     });
 
     it('includes STRUCTURAL_ANALYSIS marker in all modes', () => {
-      expect(getImageSystemPrompt(false)).toContain('STRUCTURAL_ANALYSIS');
-      expect(getImageSystemPrompt(true)).toContain('STRUCTURAL_ANALYSIS');
+      expect(getImageSystemPrompt(false).systemPrompt).toContain('STRUCTURAL_ANALYSIS');
+      expect(getImageSystemPrompt(true).systemPrompt).toContain('STRUCTURAL_ANALYSIS');
+    });
+
+    it('returns category from prompt detection', () => {
+      const { category } = getImageSystemPrompt(false, 'picture of a dog');
+      expect(category).toBe('animals');
     });
   });
 });

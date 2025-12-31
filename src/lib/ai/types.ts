@@ -35,6 +35,13 @@ export const SUPPORTED_IMAGE_TYPES = [
 export type SupportedImageType = (typeof SUPPORTED_IMAGE_TYPES)[number];
 
 /**
+ * Available AI models for generation.
+ * - flash: Fast, cost-effective (gemini-2.5-flash)
+ * - pro: More capable, slower (gemini-2.5-pro)
+ */
+export type AIModel = 'flash' | 'pro';
+
+/**
  * Request body for the /api/generate endpoint.
  */
 export interface GenerateRequestBody {
@@ -46,6 +53,8 @@ export interface GenerateRequestBody {
   mimeType?: SupportedImageType;
   /** Optional: Whether this is a first-build (simple mode) generation. Default: false */
   isFirstBuild?: boolean;
+  /** Optional: Which AI model to use. Default: 'flash' */
+  model?: AIModel;
 }
 
 
@@ -58,3 +67,9 @@ export const VALIDATION_CONSTRAINTS = {
   /** Minimum prompt length in characters */
   MIN_PROMPT_LENGTH: 1,
 } as const;
+
+/**
+ * LEGO build categories for specialized guidelines.
+ * Re-exported from categories module for convenience.
+ */
+export type { LegoCategory } from './categories';

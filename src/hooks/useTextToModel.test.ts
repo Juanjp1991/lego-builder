@@ -126,7 +126,7 @@ describe('useTextToModel', () => {
             expect(mockFetch).toHaveBeenCalledWith('/api/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: 'dragon', isFirstBuild: false }),
+                body: JSON.stringify({ prompt: 'dragon', isFirstBuild: false, model: 'flash' }),
                 signal: expect.any(AbortSignal),
             });
         });
@@ -436,7 +436,7 @@ describe('useTextToModel', () => {
             });
 
             expect(mockFetch).toHaveBeenCalledWith('/api/generate', expect.objectContaining({
-                body: JSON.stringify({ prompt: 'my dragon', isFirstBuild: false }),
+                body: JSON.stringify({ prompt: 'my dragon', isFirstBuild: false, model: 'flash' }),
             }));
         });
 
@@ -665,6 +665,31 @@ addBrick(2, 4, 0, 0, 0, 0xff0000);
             });
 
             expect(result.current.lastPrompt).toBe('castle');
+        });
+
+        it('should strip structural analysis comment from generatedHtml', async () => {
+            const mockHtmlWithAnalysis = `<html><body><script>addBrick();</script><!-- STRUCTURAL_ANALYSIS: {"isStable":true,"issues":[],"overallScore":100,"summary":"Stable"} --></body></html>`;
+            const { result } = renderHook(() => useTextToModel());
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                body: new ReadableStream({
+                    start(controller) {
+                        controller.enqueue(new TextEncoder().encode(mockHtmlWithAnalysis));
+                        controller.close();
+                    },
+                }),
+            } as any);
+
+            await act(async () => {
+                await result.current.generate('test prompt');
+            });
+
+            // The generatedHtml should NOT contain the comment
+            expect(result.current.generatedHtml).not.toContain('<!-- STRUCTURAL_ANALYSIS:');
+            expect(result.current.generatedHtml).toContain('<script>addBrick();</script>');
+            // But the analysis should still be parsed
+            expect(result.current.structuralAnalysis?.isStable).toBe(true);
         });
     });
 });
