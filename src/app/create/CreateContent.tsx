@@ -19,7 +19,11 @@ import { ModelViewer } from '@/components/viewer/ModelViewer';
 import { cn } from '@/lib/utils';
 import { MAX_RETRIES } from '@/lib/constants';
 import { STABILITY_REGENERATION_SUFFIX } from '@/lib/ai/prompts';
+import { detectCategory } from '@/lib/ai/categories';
 import type { AIModel } from '@/lib/ai/types';
+
+/** Complex categories that benefit from the Pro model */
+const COMPLEX_CATEGORIES = ['vehicles', 'buildings', 'animals', 'characters'];
 
 /**
  * Input mode for model generation
@@ -95,12 +99,12 @@ export function CreateContent() {
         phase: null,
         generatedHtml: null,
         error: null,
-        reset: () => {},
+        reset: () => { },
         duration: null,
         retryCount: 0,
         isRetryAvailable: false,
         isRetryExhausted: false,
-        retry: () => {},
+        retry: () => { },
         structuralAnalysis: null,
     };
 
@@ -148,18 +152,30 @@ export function CreateContent() {
 
     /**
      * Handle text prompt submission (direct text-to-LEGO)
+     * Auto-upgrades to Pro model for complex categories (vehicles, buildings, animals, characters)
      */
     const handleTextSubmit = async (prompt: string) => {
         setShowStructuralFeedback(true); // Reset feedback visibility for new generation
-        await textGeneration.generate(prompt, isFirstBuildMode, selectedModel);
+
+        // Auto-select Pro model for complex categories
+        const category = detectCategory(prompt);
+        const modelToUse = COMPLEX_CATEGORIES.includes(category) ? 'pro' : selectedModel;
+
+        await textGeneration.generate(prompt, isFirstBuildMode, modelToUse);
     };
 
     /**
      * Handle voxel prompt submission (two-step pipeline)
+     * Auto-upgrades to Pro model for complex categories
      */
     const handleVoxelSubmit = async (prompt: string) => {
         setShowStructuralFeedback(true);
-        await voxelGeneration.generateVoxel(prompt);
+
+        // Auto-select Pro model for complex categories
+        const category = detectCategory(prompt);
+        const modelToUse = COMPLEX_CATEGORIES.includes(category) ? 'pro' : selectedModel;
+
+        await voxelGeneration.generateVoxel(prompt, 'isometric', modelToUse);
     };
 
     /**
@@ -203,18 +219,23 @@ export function CreateContent() {
     /**
      * Handle template selection (from TemplateSuggestions)
      * Resets state and generates with the template prompt
+     * Auto-upgrades to Pro model for complex categories
      */
     const handleTemplateSelect = async (prompt: string) => {
+        // Auto-select Pro model for complex categories
+        const category = detectCategory(prompt);
+        const modelToUse = COMPLEX_CATEGORIES.includes(category) ? 'pro' : selectedModel;
+
         // Use voxel mode for templates if currently in voxel mode, otherwise text mode
         if (mode === 'text-to-voxel') {
             setShowStructuralFeedback(true);
             voxelGeneration.reset();
-            await voxelGeneration.generateVoxel(prompt);
+            await voxelGeneration.generateVoxel(prompt, 'isometric', modelToUse);
         } else {
             setMode('text'); // Switch to text mode first
             setShowStructuralFeedback(true);
             reset(); // Reset to clear retry count
-            await textGeneration.generate(prompt, isFirstBuildMode, selectedModel);
+            await textGeneration.generate(prompt, isFirstBuildMode, modelToUse);
         }
     };
 
@@ -354,7 +375,7 @@ export function CreateContent() {
                                 aria-pressed={selectedModel === 'flash'}
                                 title="Fast generation (Gemini 2.5 Flash)"
                             >
-                                ⚡ Flash
+                                ⚡ 2.5 Flash
                             </button>
                             <button
                                 type="button"
@@ -370,7 +391,23 @@ export function CreateContent() {
                                 aria-pressed={selectedModel === 'pro'}
                                 title="Higher quality (Gemini 2.5 Pro)"
                             >
-                                ✨ Pro
+                                ✨ 2.5 Pro
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedModel('pro-3')}
+                                className={cn(
+                                    'px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary',
+                                    selectedModel === 'pro-3'
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )}
+                                data-testid="model-pro3-button"
+                                aria-pressed={selectedModel === 'pro-3'}
+                                title="Advanced reasoning (Gemini 2.5 Pro with thinking)"
+                            >
+                                🧠 2.5 Pro+
                             </button>
                         </div>
                     </div>

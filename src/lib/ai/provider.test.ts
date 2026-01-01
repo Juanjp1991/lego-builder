@@ -31,9 +31,9 @@ describe('AI Provider', () => {
   });
 
   describe('geminiWithThinking', () => {
-    it('is configured with gemini-3-pro-preview model', () => {
+    it('is configured with gemini-2.5-pro model', () => {
       expect(geminiWithThinking).toEqual({
-        modelId: 'gemini-3-pro-preview',
+        modelId: 'gemini-2.5-pro',
         provider: 'google',
       });
     });

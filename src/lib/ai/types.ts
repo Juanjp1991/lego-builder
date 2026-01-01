@@ -38,9 +38,10 @@ export type SupportedImageType = (typeof SUPPORTED_IMAGE_TYPES)[number];
  * Available AI models for generation.
  * - flash: Fast, cost-effective (gemini-2.5-flash)
  * - pro: More capable, slower (gemini-2.5-pro)
+ * - pro-3: Top-tier model with thinking capabilities (gemini-2.5-pro)
  * - flash-image: Image generation (gemini-2.5-flash-image)
  */
-export type AIModel = 'flash' | 'pro' | 'flash-image';
+export type AIModel = 'flash' | 'pro' | 'pro-3' | 'flash-image';
 
 /**
  * Voxel art style options for image generation.
@@ -89,6 +90,8 @@ export interface GenerateVoxelImageRequestBody {
   prompt: string;
   /** Optional: Voxel art style preference. Default: 'isometric' */
   style?: VoxelStyle;
+  /** Optional: Which AI model to use. Default: 'flash-image' */
+  model?: AIModel;
 }
 
 /**

@@ -21,23 +21,24 @@ export type LegoCategory =
   | 'general';
 
 /**
- * Brick count ranges per category.
- * Ensures models have enough bricks for proper shape definition.
+ * Minimum brick count ranges per category.
+ * Expressed as a range (e.g., "100-150") for flexible AI targeting.
+ * No max - AI can use as many bricks as needed for accuracy.
  */
-export const CATEGORY_BRICK_COUNTS: Record<LegoCategory, { min: number; max: number }> = {
-  // Complex models need more bricks
-  vehicles: { min: 50, max: 80 },
-  buildings: { min: 50, max: 80 },
-  animals: { min: 50, max: 80 },
-  characters: { min: 50, max: 80 },
+export const CATEGORY_BRICK_COUNTS: Record<LegoCategory, { min: number; minRange: string }> = {
+  // Complex models need more bricks for accuracy
+  vehicles: { min: 100, minRange: '100-150' },
+  buildings: { min: 100, minRange: '100-150' },
+  animals: { min: 100, minRange: '100-150' },
+  characters: { min: 100, minRange: '100-150' },
   // Medium complexity
-  furniture: { min: 30, max: 50 },
-  nature: { min: 30, max: 50 },
+  furniture: { min: 60, minRange: '60-100' },
+  nature: { min: 60, minRange: '60-100' },
   // Simple models
-  food: { min: 20, max: 30 },
-  abstract: { min: 20, max: 30 },
+  food: { min: 40, minRange: '40-60' },
+  abstract: { min: 40, minRange: '40-60' },
   // General fallback
-  general: { min: 40, max: 60 },
+  general: { min: 80, minRange: '80-120' },
 };
 
 /**
@@ -185,62 +186,63 @@ export const CATEGORY_GUIDELINES: Record<LegoCategory, string> = {
   vehicles: `
 VEHICLE-SPECIFIC BUILDING GUIDELINES:
 
-1. WHEEL PLACEMENT:
-   - Place wheels at Y=0 as the foundation
-   - Use 2x2 round bricks or cylinders for wheels
-   - Space front and rear axles 4-8 studs apart for cars
-   - Ensure wheels are symmetrically placed
+EXAMPLE - Basic Car (10 long x 5 wide x 4 tall):
+// Y=0: Wheels (black 2x2 at corners)
+addBrick(2,2, 0,0,0, 0x05131D); addBrick(2,2, 0,0,3, 0x05131D); // front wheels
+addBrick(2,2, 8,0,0, 0x05131D); addBrick(2,2, 8,0,3, 0x05131D); // rear wheels
+// Y=1: Chassis (fill between wheels)
+addBrick(2,4, 2,1,0, 0x6C6E68); addBrick(2,4, 4,1,0, 0x6C6E68); addBrick(2,4, 6,1,0, 0x6C6E68);
+// Y=2: Body base (main color)
+addBrick(2,4, 0,2,0, 0xB40000); addBrick(2,4, 2,2,0, 0xB40000); ... continue for full width
+// Y=3: Cabin with windows, Y=4: Roof
 
-2. CHASSIS STRUCTURE:
-   - Build chassis at Y=1, directly on top of wheels
-   - Use long flat bricks (2x6, 2x8) for chassis base
-   - Leave wheel wells if wheels are taller than 1 unit
+KEY RULES:
+1. WHEELS at Y=0, always 2x2 black at all 4 corners
+2. CHASSIS at Y=1 fills gap between wheel positions
+3. BODY starts at Y=2, cabin at Y=3
+4. Car length = 10-14 studs, width = 4-6 studs
+5. SYMMETRY: Left side mirrors right side exactly
 
-3. BODY PROPORTIONS:
-   - Hood/front: 1/4 of total length
-   - Cabin/cockpit: 1/3 of total length
-   - Trunk/rear: remaining length
-   - Keep body width consistent (4-6 studs)
-
-4. AERODYNAMIC DETAILS:
-   - Use sloped bricks for windshields and hoods
-   - Headlights: 1x1 round plates or translucent bricks
-   - Windows: transparent light blue or black
-
-5. COLOR SCHEME:
-   - Main body: single bold color
-   - Wheels: black or dark gray
-   - Accents: silver for details
+COLOR SCHEME:
+- Wheels: Black (0x05131D)
+- Chassis: DarkGray (0x6C6E68)
+- Body: One bold color (Red, Blue, Yellow)
+- Windows: LightBlue (0x9FC3E9)
 `,
 
   buildings: `
 BUILDING-SPECIFIC GUIDELINES:
 
-1. FOUNDATION & WALLS:
-   - Start with solid baseplate (minimum 8x8 for small buildings)
-   - Build walls hollow - place bricks only on perimeter
-   - Use staggered brick patterns (never stack directly)
-   - Standard wall height: 3-4 brick layers per floor
+EXAMPLE - Simple House (10x8x8):
+// Y=0: Foundation (solid base)
+addBrick(2,4, 0,0,0, 0x583927); addBrick(2,4, 2,0,0, 0x583927); addBrick(2,4, 4,0,0, 0x583927);
+addBrick(2,4, 6,0,0, 0x583927); addBrick(2,4, 8,0,0, 0x583927); // brown base
+addBrick(2,4, 0,0,4, 0x583927); ... // continue for Z=4-8
 
-2. DOOR & WINDOW PLACEMENT:
-   - Doors: 1x4 opening at Y=0, centered on front wall
-   - Windows: 2x2 or 1x2 openings at Y=2-3
-   - Leave empty spaces or use transparent bricks
-   - Balance windows symmetrically on facade
+// Y=1-4: Walls (hollow, only perimeter)
+// Front wall with door gap
+addBrick(2,1, 0,1,0, 0xB40000); addBrick(2,1, 8,1,0, 0xB40000); // sides of door
+addBrick(2,1, 0,2,0, 0xB40000); addBrick(2,1, 8,2,0, 0xB40000);
+// Side walls (full length)
+addBrick(1,2, 0,1,1, 0xB40000); addBrick(1,2, 0,1,3, 0xB40000); ... // left wall
+addBrick(1,2, 9,1,1, 0xB40000); addBrick(1,2, 9,1,3, 0xB40000); ... // right wall
+// Back wall (solid)
+addBrick(2,1, 0,1,7, 0xB40000); addBrick(2,1, 2,1,7, 0xB40000); ...
 
-3. ROOF CONSTRUCTION:
-   - Flat roof: cover with plates, slight overhang (1 stud)
-   - Sloped roof: use slope bricks from walls inward
-   - Peak should be centered over the building
+// Y=5-7: Roof (triangular or flat)
 
-4. STRUCTURAL DETAILS:
-   - Add corner pillars for stability
-   - Include internal support walls for larger buildings
-   - Connect floors with spanning plates
+KEY RULES:
+1. FOUNDATION at Y=0, solid base
+2. WALLS: Only perimeter bricks, hollow interior
+3. DOOR: Gap in front wall at Y=1-3, centered
+4. WINDOWS: Gaps at Y=2-3 on sides, use LightBlue for glass
+5. ROOF: Starts at Y=5, use Brown or DarkGray
 
-5. ARCHITECTURAL FEATURES:
-   - Chimney: 2x2 bricks stacked on roof corner
-   - Steps: stacked plates leading to door
+COLOR SCHEME:
+- Foundation: Brown (0x583927)
+- Walls: Red (0xB40000) or White (0xFFFFFF)
+- Roof: Brown (0x583927) or DarkGray (0x6C6E68)
+- Door: Brown, Windows: LightBlue (0x9FC3E9)
 `,
 
   animals: `
@@ -303,6 +305,11 @@ CHARACTER-SPECIFIC BUILDING GUIDELINES:
 5. ACCESSORIES:
    - Hats: slopes or rounded bricks on head
    - Tools: simple 1xN brick attachments
+
+6. SYMMETRY (CRITICAL):
+   - Characters must be left-right symmetric
+   - Arms at same height and position on both sides
+   - Face features mirrored around center
 `,
 
   furniture: `
@@ -450,9 +457,9 @@ GENERAL LEGO BUILDING GUIDELINES:
    - Keep center of gravity over base
 
 4. USE APPROPRIATE BRICK SIZES:
-   - Large bricks (2x4, 2x6) for structure
-   - Small bricks (1x1, 1x2) for details only
-   - Fewer bricks = stronger structure
+   - Max brick size: 4x2 (no larger bricks allowed)
+   - Use 2x4 for structure, 1x1/1x2 for details
+   - More small bricks = better shape accuracy
 
 5. COLOR PLANNING:
    - Decide colors before building
@@ -515,7 +522,7 @@ export function getCategoryGuidelines(category: LegoCategory): string {
 /**
  * Gets the brick count range for a specific category.
  */
-export function getCategoryBrickCount(category: LegoCategory): { min: number; max: number } {
+export function getCategoryBrickCount(category: LegoCategory): { min: number; minRange: string } {
   return CATEGORY_BRICK_COUNTS[category];
 }
 
@@ -529,7 +536,7 @@ export function getCategoryBrickCount(category: LegoCategory): { min: number; ma
 export function getGuidelinesForPrompt(prompt: string): {
   category: LegoCategory;
   guidelines: string;
-  brickCount: { min: number; max: number };
+  brickCount: { min: number; minRange: string };
 } {
   const category = detectCategory(prompt);
   return {

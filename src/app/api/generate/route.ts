@@ -1,32 +1,32 @@
 /**
  * POST /api/generate
  *
- * Secure API route that proxies Gemini requests.
- * The API key is never exposed to the client.
- *
- * @see Story 2.1: Create Gemini API Proxy Route
+ * Generates a LEGO model from text description and/or image.
+ * Supports multiple AI models and handles streaming responses.
  */
 
 import { streamText } from 'ai';
-import { geminiFlash, geminiPro } from '@/lib/ai/provider';
-import { getSystemPrompt, getImageSystemPrompt } from '@/lib/ai/prompts';
-import type { AIModel } from '@/lib/ai/types';
+import {
+  geminiFlash,
+  geminiFlashImage,
+  geminiPro,
+} from '@/lib/ai/provider';
+import { getImageSystemPrompt, getSystemPrompt } from '@/lib/ai/prompts';
+import { generateContentStreamV3 } from '@/lib/ai/gemini-v3';
 import {
   checkRateLimit,
   getClientIP,
   getRetryAfterSeconds,
 } from '@/lib/ai/rate-limiter';
-import {
-  type APIErrorResponse,
-  type GenerateRequestBody,
-  VALIDATION_CONSTRAINTS,
-  SUPPORTED_IMAGE_TYPES,
+import type {
+  APIErrorResponse,
+  GenerateRequestBody,
 } from '@/lib/ai/types';
 
-/** Allow up to 60 seconds for AI generation (NFR1: <1 min) */
+/** Allow up to 60 seconds for complex model generation */
 export const maxDuration = 60;
 
-/** Use Node.js runtime for streaming support */
+/** Use Node.js runtime for image processing and AI SDK */
 export const runtime = 'nodejs';
 
 /**
@@ -43,62 +43,6 @@ function createErrorResponse(
     error: { code, message },
   };
   return Response.json(body, { status, headers });
-}
-
-/**
- * Validates the request body.
- * Returns null if valid, or an error Response if invalid.
- */
-function validateRequest(body: unknown): Response | null {
-  // Check if body exists and is an object
-  if (!body || typeof body !== 'object') {
-    return createErrorResponse(
-      'INVALID_INPUT',
-      'Request body is required',
-      400
-    );
-  }
-
-  const { prompt } = body as GenerateRequestBody;
-
-  // Check if prompt exists
-  if (prompt === undefined || prompt === null) {
-    return createErrorResponse(
-      'INVALID_INPUT',
-      'Prompt is required',
-      400
-    );
-  }
-
-  // Check if prompt is a string
-  if (typeof prompt !== 'string') {
-    return createErrorResponse(
-      'INVALID_INPUT',
-      'Prompt must be a string',
-      400
-    );
-  }
-
-  // Check for empty or whitespace-only prompt
-  const trimmedPrompt = prompt.trim();
-  if (trimmedPrompt.length < VALIDATION_CONSTRAINTS.MIN_PROMPT_LENGTH) {
-    return createErrorResponse(
-      'INVALID_INPUT',
-      'Prompt cannot be empty',
-      400
-    );
-  }
-
-  // Check prompt length
-  if (trimmedPrompt.length > VALIDATION_CONSTRAINTS.MAX_PROMPT_LENGTH) {
-    return createErrorResponse(
-      'INVALID_INPUT',
-      `Prompt too long (max ${VALIDATION_CONSTRAINTS.MAX_PROMPT_LENGTH} characters)`,
-      400
-    );
-  }
-
-  return null;
 }
 
 /**
@@ -130,87 +74,158 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    // Validate request
-    const validationError = validateRequest(body);
-    if (validationError) {
-      return validationError;
+    // Validate body structure
+    if (!body || typeof body !== 'object') {
+      return createErrorResponse(
+        'INVALID_INPUT',
+        'Request body is required',
+        400
+      );
     }
 
-    const { prompt, imageData, mimeType, isFirstBuild = false, model = 'flash' } = body as GenerateRequestBody;
+    const {
+      prompt,
+      imageData,
+      mimeType,
+      model = 'flash',
+      isFirstBuild = false,
+    } = body as GenerateRequestBody;
+
+    // Validate prompt
+    if (!prompt || typeof prompt !== 'string') {
+      return createErrorResponse(
+        'INVALID_INPUT',
+        'Prompt is required and must be a string',
+        400
+      );
+    }
+
     const trimmedPrompt = prompt.trim();
-
-    // Select the AI model based on the request
-    const selectedModel = model === 'pro' ? geminiPro : geminiFlash;
-
-    // Validate image data if provided
-    if (imageData) {
-      // Validate mimeType is provided and supported
-      if (!mimeType) {
-        return createErrorResponse(
-          'INVALID_INPUT',
-          'mimeType is required when imageData is provided',
-          400
-        );
-      }
-      if (!SUPPORTED_IMAGE_TYPES.includes(mimeType as typeof SUPPORTED_IMAGE_TYPES[number])) {
-        return createErrorResponse(
-          'INVALID_INPUT',
-          'Unsupported image type. Please use PNG, JPEG, WEBP, or HEIC.',
-          400
-        );
-      }
-      // Validate imageData size (max ~13.3MB base64 = 10MB raw)
-      const MAX_IMAGE_DATA_SIZE = 14 * 1024 * 1024; // ~14MB base64
-      if (imageData.length > MAX_IMAGE_DATA_SIZE) {
-        return createErrorResponse(
-          'INVALID_INPUT',
-          'Image too large. Please use an image smaller than 10MB.',
-          400
-        );
-      }
+    if (trimmedPrompt.length === 0) {
+      return createErrorResponse(
+        'INVALID_INPUT',
+        'Prompt cannot be empty',
+        400
+      );
     }
 
-    // Determine if this is image-based generation
-    const isImageGeneration = Boolean(imageData);
-
-    // Build messages array for streamText
-    // Supports both text-only and text+image inputs (AC #5)
-    const messages: Array<{ role: 'user'; content: Array<{ type: 'text'; text: string } | { type: 'image'; image: string; mimeType?: string }> }> = [
-      {
-        role: 'user',
-        content: imageData
-          ? [
-            { type: 'image', image: imageData, ...(mimeType && { mimeType }) },
-            { type: 'text', text: trimmedPrompt },
-          ]
-          : [{ type: 'text', text: trimmedPrompt }],
-      },
-    ];
-
-    // Use appropriate prompt based on generation type and first-build mode
-    // Story 2.5: First-Build Guarantee - use simpler prompts for first-time users
-    // Now includes category detection for specialized building guidelines
-    const { systemPrompt, category } = isImageGeneration
-      ? getImageSystemPrompt(isFirstBuild, trimmedPrompt)
-      : getSystemPrompt(isFirstBuild, trimmedPrompt);
+    // Build system prompt based on whether image is provided
+    const { systemPrompt, category } = imageData && mimeType
+      ? getImageSystemPrompt({ isFirstBuild, userPrompt: trimmedPrompt })
+      : getSystemPrompt({ isFirstBuild, userPrompt: trimmedPrompt });
 
     // Log detected category for analytics/debugging
     console.log(`[generate] Detected category: ${category}`);
 
-    // Generate with streaming using Vercel AI SDK
-    const result = await streamText({
-      model: selectedModel,
-      system: systemPrompt,
-      messages,
-    });
+    // Generate with hybrid algorithm for pro-3 with image
+    if (model === 'pro-3' && imageData) {
+      console.log('[generate] Using hybrid voxel-to-brick algorithm');
 
-    // Return streaming response
-    return result.toTextStreamResponse();
+      // Import algorithm functions
+      const { convertVoxelsToBricks } = await import('@/lib/lego/voxel-to-brick');
+      const { generateHTMLFromBricks, parseVoxelJSON } = await import('@/lib/lego/brick-to-html');
+
+      // Step 1: Get JSON voxel grid from Gemini 3.0
+      const jsonResponse = await generateContentStreamV3(trimmedPrompt, systemPrompt, imageData, mimeType);
+
+      // Read entire JSON stream
+      const reader = jsonResponse.getReader();
+      const decoder = new TextDecoder();
+      let jsonString = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        jsonString += decoder.decode(value, { stream: true });
+      }
+      jsonString += decoder.decode();
+
+      console.log('[generate] Received JSON (length):', jsonString.length);
+
+      // Step 2: Parse JSON to voxels
+      const voxelData = parseVoxelJSON(jsonString);
+      if (!voxelData || !voxelData.voxels || voxelData.voxels.length === 0) {
+        console.error('[generate] Parsing failed');
+        throw new Error('Could not parse voxel data');
+      }
+
+      console.log(`[generate] Parsed ${voxelData.voxels.length} voxels`);
+
+      // Step 3: Convert voxels to bricks
+      const bricks = convertVoxelsToBricks(voxelData.voxels);
+      console.log(`[generate] Generated ${bricks.length} bricks`);
+
+      // Step 4: Generate HTML
+      const html = generateHTMLFromBricks(bricks);
+
+      // Return as stream
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(html));
+          controller.close();
+        }
+      });
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Vercel-AI-Data-Stream': 'v1'
+        }
+      });
+    } else if (model === 'pro-3') {
+      const stream = await generateContentStreamV3(trimmedPrompt, systemPrompt, imageData, mimeType);
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Vercel-AI-Data-Stream': 'v1'
+        }
+      });
+    } else {
+      // Use Vercel AI SDK for other models
+      const models: Record<string, typeof geminiFlash> = {
+        flash: geminiFlash,
+        'flash-image': geminiFlashImage,
+        pro: geminiPro,
+        'pro-3': geminiPro,
+      };
+
+      const selectedModel = models[model] || geminiFlash;
+
+      const messages: Array<{ role: 'user'; content: any }> = [
+        {
+          role: 'user',
+          content: imageData && mimeType
+            ? [
+              { type: 'text', text: trimmedPrompt },
+              { type: 'image', image: imageData, mimeType },
+            ]
+            : trimmedPrompt,
+        },
+      ];
+
+      const result = await streamText({
+        model: selectedModel,
+        system: systemPrompt,
+        messages,
+      });
+
+      return result.toTextStreamResponse();
+    }
   } catch (error) {
-    // Log detailed error server-side only
-    console.error('Generation failed:', error);
+    console.error('[generate] Generation failed:', error);
 
-    // Return user-friendly error message
+    if (error instanceof Error) {
+      const errorMsg = error.message.toLowerCase();
+      if (errorMsg.includes('rate limit') || errorMsg.includes('quota') || errorMsg.includes('resource_exhausted')) {
+        return createErrorResponse(
+          'RATE_LIMITED',
+          'AI service is busy. Please wait a moment and try again.',
+          429
+        );
+      }
+    }
+
     return createErrorResponse(
       'GENERATION_FAILED',
       'Unable to generate model. Please try again.',

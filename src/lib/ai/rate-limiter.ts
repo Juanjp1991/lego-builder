@@ -12,8 +12,8 @@ interface RateLimitRecord {
 
 const rateLimitStore = new Map<string, RateLimitRecord>();
 
-/** Maximum requests allowed per window */
-export const RATE_LIMIT_MAX_REQUESTS = 10;
+/** Maximum requests allowed per window - Increased to 30 for smoother developer experience */
+export const RATE_LIMIT_MAX_REQUESTS = 30;
 
 /** Rate limit window in milliseconds (1 minute) */
 export const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -37,10 +37,32 @@ export function getClientIP(req: Request): string {
 }
 
 /**
+ * IPs that bypass rate limiting (localhost, development).
+ * Add your IP here for testing.
+ */
+const WHITELISTED_IPS = new Set([
+  'unknown',      // Local development (no proxy headers)
+  '127.0.0.1',    // Localhost IPv4
+  '::1',          // Localhost IPv6
+  'localhost',
+]);
+
+/**
  * Checks if the client has exceeded the rate limit.
  * Returns true if request is allowed, false if rate limited.
+ *
+ * Development: Set DISABLE_RATE_LIMIT=true in .env.local to bypass.
  */
 export function checkRateLimit(ip: string): boolean {
+  // Bypass rate limiting in development or for whitelisted IPs
+  if (
+    process.env.DISABLE_RATE_LIMIT === 'true' ||
+    process.env.NODE_ENV === 'development' ||
+    WHITELISTED_IPS.has(ip)
+  ) {
+    return true;
+  }
+
   const now = Date.now();
   const record = rateLimitStore.get(ip);
 

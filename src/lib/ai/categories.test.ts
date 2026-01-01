@@ -231,9 +231,9 @@ describe('getCategoryBrickCount', () => {
     ];
 
     for (const category of categories) {
-      const { min, max } = getCategoryBrickCount(category);
+      const { min, minRange } = getCategoryBrickCount(category);
       expect(min).toBeGreaterThan(0);
-      expect(max).toBeGreaterThan(min);
+      expect(minRange).toMatch(/^\d+-\d+$/); // Format: "100-150"
     }
   });
 
@@ -242,21 +242,20 @@ describe('getCategoryBrickCount', () => {
     const foodCount = getCategoryBrickCount('food');
 
     expect(vehicleCount.min).toBeGreaterThan(foodCount.min);
-    expect(vehicleCount.max).toBeGreaterThan(foodCount.max);
   });
 
-  it('returns expected tier values', () => {
-    // Complex tier
-    expect(getCategoryBrickCount('vehicles')).toEqual({ min: 50, max: 80 });
-    expect(getCategoryBrickCount('buildings')).toEqual({ min: 50, max: 80 });
+  it('returns expected tier values with minRange', () => {
+    // Complex tier (doubled for accuracy)
+    expect(getCategoryBrickCount('vehicles')).toEqual({ min: 100, minRange: '100-150' });
+    expect(getCategoryBrickCount('buildings')).toEqual({ min: 100, minRange: '100-150' });
 
     // Medium tier
-    expect(getCategoryBrickCount('furniture')).toEqual({ min: 30, max: 50 });
-    expect(getCategoryBrickCount('nature')).toEqual({ min: 30, max: 50 });
+    expect(getCategoryBrickCount('furniture')).toEqual({ min: 60, minRange: '60-100' });
+    expect(getCategoryBrickCount('nature')).toEqual({ min: 60, minRange: '60-100' });
 
     // Simple tier
-    expect(getCategoryBrickCount('food')).toEqual({ min: 20, max: 30 });
-    expect(getCategoryBrickCount('abstract')).toEqual({ min: 20, max: 30 });
+    expect(getCategoryBrickCount('food')).toEqual({ min: 40, minRange: '40-60' });
+    expect(getCategoryBrickCount('abstract')).toEqual({ min: 40, minRange: '40-60' });
   });
 });
 
@@ -266,7 +265,7 @@ describe('getGuidelinesForPrompt', () => {
 
     expect(result.category).toBe('vehicles');
     expect(result.guidelines).toContain('WHEEL');
-    expect(result.brickCount).toEqual({ min: 50, max: 80 });
+    expect(result.brickCount).toEqual({ min: 100, minRange: '100-150' });
   });
 
   it('handles unknown prompts with general fallback', () => {
@@ -274,7 +273,7 @@ describe('getGuidelinesForPrompt', () => {
 
     expect(result.category).toBe('general');
     expect(result.guidelines).toBeDefined();
-    expect(result.brickCount).toEqual({ min: 40, max: 60 });
+    expect(result.brickCount).toEqual({ min: 80, minRange: '80-120' });
   });
 });
 
@@ -326,7 +325,7 @@ describe('CATEGORY_BRICK_COUNTS', () => {
       const count = CATEGORY_BRICK_COUNTS[category];
       expect(count).toBeDefined();
       expect(count.min).toBeDefined();
-      expect(count.max).toBeDefined();
+      expect(count.minRange).toBeDefined();
     }
   });
 });

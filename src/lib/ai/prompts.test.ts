@@ -140,8 +140,8 @@ describe('AI Prompts', () => {
       expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('function addBrick');
     });
 
-    it('instructs to keep design simple', () => {
-      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('15-50 bricks');
+    it('instructs to use appropriate brick count for accuracy', () => {
+      expect(IMAGE_TO_LEGO_SYSTEM_PROMPT).toContain('80-120 bricks');
     });
 
     it('mentions LEGO Master Builder', () => {

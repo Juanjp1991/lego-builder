@@ -1,8 +1,13 @@
 /**
  * AI Provider Configuration
  *
- * Centralizes AI model configuration using Vercel AI SDK.
- * ALWAYS use these exports - never call @google/genai directly.
+ * Centralizes AI model configuration using Vercel AI SDK with Google AI Studio.
+ * Uses the latest stable Gemini 2.5 models (June 2025).
+ *
+ * Required environment variables:
+ * - GOOGLE_GENERATIVE_AI_API_KEY: Your Google AI Studio API key
+ *
+ * Get your API key from: https://aistudio.google.com/apikey
  *
  * @see https://ai-sdk.dev/providers/ai-sdk-providers/google-generative-ai
  */
@@ -11,26 +16,26 @@ import { google } from '@ai-sdk/google';
 
 /**
  * Default model for text-to-model generation.
- * Gemini 2.5 Flash is fast and capable for MVP use cases.
+ * Gemini 2.5 Flash - latest stable mid-size multimodal model (June 2025).
+ * Supports up to 1 million tokens with thinking capabilities.
  */
 export const geminiFlash = google('gemini-2.5-flash');
 
 /**
- * More capable model for complex operations (future use).
+ * More capable model for complex operations.
+ * Gemini 2.5 Pro - latest stable large multimodal model (June 2025).
  */
 export const geminiPro = google('gemini-2.5-pro');
 
 /**
- * Model with thinking capabilities for complex code generation (future use).
- * Use for voxel scene generation where detailed reasoning is needed.
+ * Model with thinking capabilities for complex code generation.
+ * Uses Gemini 2.5 Pro for advanced reasoning.
  */
-export const geminiWithThinking = google('gemini-3-pro-preview');
+export const geminiWithThinking = google('gemini-2.5-pro');
 
 /**
  * Image generation model for creating voxel concept images.
- * Uses Gemini 2.5 Flash Image - same API key, with image generation capability.
- * Cost: ~$0.04 per image (1290 output tokens at $30/million).
- *
- * @see https://developers.googleblog.com/en/introducing-gemini-2-5-flash-image/
+ * Uses Gemini 2.5 Flash Image for high-quality image generation.
  */
 export const geminiFlashImage = google('gemini-2.5-flash-image');
+

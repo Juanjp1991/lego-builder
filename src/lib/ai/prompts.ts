@@ -23,8 +23,11 @@ STABILITY RULES:
 2. WIDE BASE: Base width ≥ 1/3 height, start with 6x6+ foundation
 3. SUPPORT: Pillars every 4-6 studs for hollow structures, fill corners
 4. CANTILEVER: Max 2 stud overhang unsupported, support longer extensions
-5. BRICK SIZE: Use 2x4/2x6 for structure, 1x1/1x2 only for details
-6. BALANCE: Distribute weight evenly, center gravity over base`;
+5. BRICK SIZE: Max 4x2 bricks. Use 2x4 for structure, 1x1/1x2 for details. NO bricks larger than 4x2.
+6. BALANCE: Distribute weight evenly, center gravity over base
+7. BUILD LAYER BY LAYER: Complete Y=0 first, then Y=1, then Y=2, etc. Never place a brick at Y=N before completing Y=N-1.
+8. COLOR ACCURACY: Match colors exactly to the source/description. Use the closest LEGO palette color. Color fidelity is critical.
+9. SILHOUETTE FIRST: Build the accurate outline/silhouette before filling details. The shape must be instantly recognizable.`;
 
 /**
  * Shared HTML template for LEGO model rendering.
@@ -34,6 +37,7 @@ STABILITY RULES:
 const SHARED_HTML_TEMPLATE = `<!DOCTYPE html>
 <html>
 <head>
+  <!-- GENERATION_METHOD: gemini_direct -->
   <style>body{margin:0;background:#e0e0e0;overflow:hidden}</style>
   <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
 </head>
@@ -103,13 +107,39 @@ window.addEventListener('resize',()=>{camera.aspect=window.innerWidth/window.inn
  * Core instructions shared between text and image prompts.
  */
 const CORE_INSTRUCTIONS = `
-INSTRUCTIONS:
-1. Output the FULL HTML template with your addBrick() calls in the BUILD section
-2. addBrick(width, depth, x, y, z, colorHex) - integers only
-3. Y=0 is ground, Y=1+ must be supported
-4. Use largest bricks possible (2x4, 2x6) to minimize count
-5. CARS: Wheels Y=0, chassis Y=1, body Y=2+
-6. HOUSES: Baseplate Y=0, hollow walls Y=1-3, roof on top`;
+CRITICAL INSTRUCTIONS:
+1. Output the FULL HTML template with addBrick() calls in the BUILD section
+2. addBrick(width, depth, x, y, z, colorHex) - width=X-size, depth=Z-size, max 4x2
+
+STEP-BY-STEP PROCESS (FOLLOW EXACTLY):
+1. PLAN: Decide total dimensions (e.g., car = 12x6x5 studs)
+2. LAYER 0: Build complete ground layer first (wheels, base)
+3. LAYER 1-N: Build each layer completely before moving up
+4. CHECK: Every brick at Y>0 must have support below it
+
+COORDINATE SYSTEM:
+- X = left-right (width)
+- Y = bottom-top (height, 0=ground)
+- Z = front-back (depth)
+- Origin (0,0,0) = front-left-bottom corner
+
+EXAMPLE - Simple 4x4x3 Red Cube:
+// Layer 0 (Y=0) - complete base
+addBrick(2,2, 0,0,0, 0xB40000); addBrick(2,2, 2,0,0, 0xB40000);
+addBrick(2,2, 0,0,2, 0xB40000); addBrick(2,2, 2,0,2, 0xB40000);
+// Layer 1 (Y=1) - offset for strength
+addBrick(2,2, 1,1,0, 0xB40000); addBrick(2,2, 1,1,2, 0xB40000);
+addBrick(2,1, 0,1,1, 0xB40000); addBrick(2,1, 2,1,1, 0xB40000);
+// Layer 2 (Y=2) - top
+addBrick(2,2, 0,2,0, 0xB40000); addBrick(2,2, 2,2,0, 0xB40000);
+addBrick(2,2, 0,2,2, 0xB40000); addBrick(2,2, 2,2,2, 0xB40000);
+
+REFERENCE SIZES (studs):
+- Small car: 10x5x4 (LxWxH)
+- House: 12x10x8
+- Person: 3x2x6
+- Tree: 4x4x8
+- Animal: 8x4x5`;
 
 /**
  * System prompt for LEGO model generation.
@@ -128,7 +158,7 @@ ${CORE_INSTRUCTIONS}`;
  */
 export const FIRST_BUILD_SUFFIX = `
 Keep this design simple and beginner-friendly:
-- Stick to standard brick sizes (2x4, 2x3, 2x2, 1x4) - prefer larger bricks for stability
+- Stick to standard brick sizes (2x4, 2x3, 2x2, 1x4, 1x2, 1x1) - max 4x2 allowed
 - Make the shape recognizable but not overly detailed
 - Prioritize structural stability over complexity. Adopt a Minecraft-like voxel aesthetic: Blocky, square, reliable structures.`;
 
@@ -138,33 +168,32 @@ Keep this design simple and beginner-friendly:
  *
  * @see Story 2.3: Implement Image-to-Lego Model Generation
  */
-export const IMAGE_TO_LEGO_SYSTEM_PROMPT = `You are an expert LEGO Master Builder transforming images into buildable models.
+export const IMAGE_TO_LEGO_SYSTEM_PROMPT = `You are a LEGO voxel designer. Analyze the image and create a 3D voxel grid.
 
-IMAGE ANALYSIS:
-1. Identify the main subject/object in the image
-2. Simplify to blocky, LEGO-friendly form
-3. Match colors from image using LEGO palette
-4. Use 15-50 bricks, capture essence not details
+OUTPUT FORMAT (JSON):
+\`\`\`json
+{
+  "voxels": [
+    {"x": 0, "y": 0, "z": 0, "color": "0xB40000"},
+    {"x": 1, "y": 0, "z": 0, "color": "0xB40000"}
+  ]
+}
+\`\`\`
 
-VOXEL IMAGE HANDLING:
-When the input is a voxel/Minecraft-style image with visible cube/block structure:
-1. DIRECTLY translate voxel cubes to LEGO bricks - each voxel row = one Y level
-2. Preserve the exact color mapping from voxels to nearest LEGO color
-3. Maintain the blocky aesthetic - do NOT smooth or over-simplify
-4. Count visible voxel layers to determine height
-5. Use standard bricks (1x1, 1x2, 2x2, 2x4) that match voxel grid positions
-6. Keep internal structure if voxels show hollow areas
+RULES:
+1. Each voxel represents a 2x2 LEGO stud unit
+2. Use integer coordinates only
+3. Y=0 is ground level
+4. Colors must be hex format (0xRRGGBB)
+5. Keep grid simple: 6-16 voxels per side maximum
+6. Build stable structures (wide base, connected parts)
 
-VOXEL-TO-BRICK MAPPING:
-- 1 voxel width = 1 stud
-- Match voxel colors to nearest LEGO palette color
-- Preserve gaps and negative space from voxel image
-- Build layer by layer from Y=0 (ground) upward
+VOXEL IMAGE CONVERSION:
+- Identify main shapes in the image
+- Translate to blocky voxel form
+- Use standard LEGO colors: ${LEGO_COLOR_PALETTE}
 
-CRITICAL: Generate a COMPLETE HTML file using this exact template. Only add addBrick() calls in the BUILD section.
-
-${SHARED_HTML_TEMPLATE}
-${CORE_INSTRUCTIONS}`;
+OUTPUT: JSON only, no explanation.`;
 
 /**
  * Suffix for structural stability analysis - condensed format.
@@ -240,8 +269,8 @@ export function getSystemPrompt(
     if (opts.targetBrickCount) {
       prompt += `\nBRICKS: Target ~${opts.targetBrickCount} bricks (${opts.targetBrickCount - 10} to ${opts.targetBrickCount + 10} acceptable)`;
     } else {
-      // Minimum brick count (no max - let AI use as many as needed)
-      prompt += `\nBRICKS: Use at least ${brickCount.min} for ${category}`;
+      // Minimum brick range (no max - AI can use more for accuracy)
+      prompt += `\nBRICKS: Use ${brickCount.minRange} bricks minimum for ${category}. More bricks = better accuracy.`;
     }
   } else if (opts.targetBrickCount) {
     // No category detected but target specified
@@ -301,8 +330,8 @@ export function getImageSystemPrompt(
     if (opts.targetBrickCount) {
       prompt += `\nBRICKS: Target ~${opts.targetBrickCount} bricks (${opts.targetBrickCount - 10} to ${opts.targetBrickCount + 10} acceptable)`;
     } else {
-      // Minimum brick count (no max - let AI use as many as needed)
-      prompt += `\nBRICKS: Use at least ${brickCount.min} for ${category}`;
+      // Minimum brick range (no max - AI can use more for accuracy)
+      prompt += `\nBRICKS: Use ${brickCount.minRange} bricks minimum for ${category}. More bricks = better accuracy.`;
     }
   } else if (opts.targetBrickCount) {
     // No category detected but target specified

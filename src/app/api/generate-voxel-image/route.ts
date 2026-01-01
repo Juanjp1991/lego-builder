@@ -8,7 +8,7 @@
  */
 
 import { generateText } from 'ai';
-import { geminiFlashImage } from '@/lib/ai/provider';
+import { geminiFlashImage, geminiWithThinking } from '@/lib/ai/provider';
 import {
   VOXEL_IMAGE_GENERATION_PROMPT,
   getVoxelUserPrompt,
@@ -86,7 +86,7 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    const { prompt, style = 'isometric' } = body as GenerateVoxelImageRequestBody;
+    const { prompt, style = 'isometric', model = 'flash-image' } = body as GenerateVoxelImageRequestBody;
 
     // Validate prompt
     if (!prompt || typeof prompt !== 'string') {
@@ -121,10 +121,12 @@ export async function POST(req: Request): Promise<Response> {
 
     console.log(`[generate-voxel-image] Generating voxel image for: "${prompt.trim()}" (style: ${style})`);
 
-    // Generate image using Gemini 2.5 Flash Image
+    // Generate image using requested model (defaults to Gemini 2.5 Flash Image)
     // The model returns images in result.files as Uint8Array
+    const selectedModel = model === 'pro-3' ? geminiWithThinking : geminiFlashImage;
+
     const result = await generateText({
-      model: geminiFlashImage,
+      model: selectedModel,
       system: VOXEL_IMAGE_GENERATION_PROMPT,
       prompt: userPrompt,
     });
@@ -174,10 +176,11 @@ export async function POST(req: Request): Promise<Response> {
 
     // Check for specific error types
     if (error instanceof Error) {
-      if (error.message.includes('rate limit') || error.message.includes('quota')) {
+      const errorMsg = error.message.toLowerCase();
+      if (errorMsg.includes('rate limit') || errorMsg.includes('quota') || errorMsg.includes('resource_exhausted')) {
         return createErrorResponse(
           'RATE_LIMITED',
-          'API rate limit exceeded. Please try again later.',
+          'Gemini API free tier limit reached. Wait 15 seconds or use regular "Text" mode.',
           429
         );
       }

@@ -8,7 +8,7 @@ import {
   extractCleanHtml,
 } from '@/lib/ai/parse-structural-analysis';
 import type { StructuralAnalysisResult } from '@/lib/ai/structural-analysis';
-import type { VoxelStyle, GenerateVoxelImageResponse } from '@/lib/ai/types';
+import type { VoxelStyle, GenerateVoxelImageResponse, AIModel } from '@/lib/ai/types';
 
 /**
  * Two-step pipeline status
@@ -50,7 +50,7 @@ export interface VoxelImageData {
 const ERROR_MESSAGES: Record<string, string> = {
   GENERATION_FAILED: "Couldn't create your design. Want to try again?",
   INVALID_INPUT: "Please enter a description of what you'd like to build.",
-  RATE_LIMITED: "You're creating too fast! Please wait a moment.",
+  RATE_LIMITED: "Gemini API limit reached. Wait 15 seconds or try 'Text' mode.",
   NETWORK_ERROR: 'Unable to connect. Please check your internet connection.',
   DEFAULT: 'Something went wrong. Please try again.',
 };
@@ -83,13 +83,13 @@ export interface UseTextToVoxelModelReturn {
   /** Which step failed ('voxel' or 'lego') */
   errorStep: 'voxel' | 'lego' | null;
   /** Start voxel generation */
-  generateVoxel: (prompt: string, style?: VoxelStyle) => Promise<void>;
+  generateVoxel: (prompt: string, style?: VoxelStyle, model?: AIModel) => Promise<void>;
   /** Approve voxel and proceed to LEGO generation */
   approveVoxel: (isFirstBuild?: boolean) => Promise<void>;
   /** Regenerate voxel with same prompt */
   regenerateVoxel: () => Promise<void>;
   /** Regenerate voxel with new prompt */
-  editVoxelPrompt: (newPrompt: string, style?: VoxelStyle) => Promise<void>;
+  editVoxelPrompt: (newPrompt: string, style?: VoxelStyle, model?: AIModel) => Promise<void>;
   /** Reset to idle state */
   reset: () => void;
   /** Generation duration in ms */
@@ -151,6 +151,7 @@ export function useTextToVoxelModel(): UseTextToVoxelModelReturn {
   const startTimeRef = useRef<number | null>(null);
   const lastPromptRef = useRef<string | null>(null);
   const lastStyleRef = useRef<VoxelStyle>('isometric');
+  const lastModelRef = useRef<AIModel>('flash-image');
   const lastIsFirstBuildRef = useRef<boolean>(false);
 
   // Cleanup on unmount
@@ -186,7 +187,7 @@ export function useTextToVoxelModel(): UseTextToVoxelModelReturn {
   /**
    * Step 1: Generate voxel image from text
    */
-  const generateVoxel = useCallback(async (prompt: string, style: VoxelStyle = 'isometric'): Promise<void> => {
+  const generateVoxel = useCallback(async (prompt: string, style: VoxelStyle = 'isometric', model: AIModel = 'flash-image'): Promise<void> => {
     // Cancel any in-progress request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -197,9 +198,10 @@ export function useTextToVoxelModel(): UseTextToVoxelModelReturn {
       URL.revokeObjectURL(voxelImage.previewUrl);
     }
 
-    // Store prompt and style
+    // Store prompt, style, and model
     lastPromptRef.current = prompt;
     lastStyleRef.current = style;
+    lastModelRef.current = model;
     setVoxelRetryCount(0);
     setLegoRetryCount(0);
 
@@ -224,7 +226,7 @@ export function useTextToVoxelModel(): UseTextToVoxelModelReturn {
       const response = await fetch('/api/generate-voxel-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, style }),
+        body: JSON.stringify({ prompt, style, model }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -318,7 +320,7 @@ export function useTextToVoxelModel(): UseTextToVoxelModelReturn {
           imageData: voxelImage.data,
           mimeType: voxelImage.mimeType,
           isFirstBuild,
-          model: 'flash',
+          model: 'pro-3', // Use Gemini 3.0 Pro for higher quality LEGO conversion
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -385,14 +387,14 @@ export function useTextToVoxelModel(): UseTextToVoxelModelReturn {
   const regenerateVoxel = useCallback(async (): Promise<void> => {
     if (!lastPromptRef.current) return;
     setVoxelRetryCount((prev) => prev + 1);
-    await generateVoxel(lastPromptRef.current, lastStyleRef.current);
+    await generateVoxel(lastPromptRef.current, lastStyleRef.current, lastModelRef.current);
   }, [generateVoxel]);
 
   /**
    * Edit prompt and regenerate voxel
    */
-  const editVoxelPrompt = useCallback(async (newPrompt: string, style?: VoxelStyle): Promise<void> => {
-    await generateVoxel(newPrompt, style || lastStyleRef.current);
+  const editVoxelPrompt = useCallback(async (newPrompt: string, style?: VoxelStyle, model?: AIModel): Promise<void> => {
+    await generateVoxel(newPrompt, style || lastStyleRef.current, model || lastModelRef.current);
   }, [generateVoxel]);
 
   /**

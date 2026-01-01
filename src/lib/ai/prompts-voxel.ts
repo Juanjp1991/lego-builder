@@ -14,22 +14,18 @@ import { LEGO_COLOR_PALETTE } from './prompts';
  */
 export const VOXEL_IMAGE_GENERATION_PROMPT = `You are a voxel art generator creating LEGO-compatible 3D concept images.
 
-STYLE REQUIREMENTS:
-1. Create isometric voxel art in a clean, Minecraft-inspired aesthetic
-2. Use a limited color palette (8-12 distinct colors maximum)
-3. Each voxel should be clearly visible as a discrete cube
-4. Render at high resolution (1024x1024) with sharp edges
-5. Include soft ambient occlusion shadows for depth
-6. Use a neutral light gray gradient background
-7. Object should be centered and fill ~70% of the frame
+STYLE REQUIREMENTS (CRITICAL: CHUNKY & LOW-RES):
+1. **LOW RESOLUTION GRID**: Imagine a coarse 32x32x32 grid. Do NOT create high-res details.
+2. **BIG BLOCKS**: Use "Duplo-style" or "Chunky" voxels. Each block should be large and distinct.
+3. **MINIMALISM**: Use the fewest number of blocks possible to convey the shape.
+4. **CLEAN SURFACES**: Flat, solid colors. No noise, no gradients, no fine textures.
+5. Render with sharp edges and clear ambient occlusion shadows to define block separation.
+6. Object centered on light gray background.
 
 STRUCTURAL REQUIREMENTS:
-1. Design for LEGO buildability - avoid thin single-voxel features
-2. Ensure stable base (wider at bottom than top)
-3. No floating elements or impossible overhangs
-4. Minimum 2-3 voxels wide for structural parts
-5. Keep proportions realistic and buildable
-6. Build from the ground up - all parts must connect
+1. SOLID & HEAVY: Avoid thin, fragile parts. Use 2x2 or 3x3 block thickness minimum.
+2. WIDE BASE: Ensure the object sits firmly on the ground.
+3. CONNECTED: All parts must be physically attached (no floating pixels).
 
 COLOR GUIDANCE:
 Match colors to standard LEGO palette where possible:
@@ -43,7 +39,7 @@ CAMERA ANGLE:
 - Consistent lighting from upper-left
 
 OUTPUT:
-Generate a single, clean voxel art image that can be directly used as reference for LEGO model generation.`;
+Generate a single, clean, low-resolution voxel art image. It should look like it was built with large plastic blocks.`;
 
 /**
  * Style-specific modifiers for voxel generation.
@@ -51,17 +47,17 @@ Generate a single, clean voxel art image that can be directly used as reference 
 const STYLE_MODIFIERS: Record<VoxelStyle, string> = {
   minecraft: `
 MINECRAFT STYLE SPECIFICS:
-- Use 16x16 pixel texture-like surfaces on each voxel
-- Blocky, cubic aesthetic with visible grid lines
-- Colors should be slightly muted/earthy like Minecraft blocks
-- Include subtle texture variation within color blocks`,
+- "Big Block" aesthetic
+- Visible grid lines between blocks
+- Simple, solid colors (avoid noisy textures)
+- Focus on the overall silhouette`,
   isometric: `
 ISOMETRIC STYLE SPECIFICS:
-- Clean, modern voxel aesthetic
-- Smooth, solid colors without texture
-- Precise geometric edges
-- Professional 3D render quality
-- Subtle edge highlighting`,
+- "Low Poly" / "MagicaVoxel" style
+- Large, clean cubes
+- Sharp geometric edges
+- No micro-details
+- Focus on clear readability of every single block`,
 };
 
 /**
