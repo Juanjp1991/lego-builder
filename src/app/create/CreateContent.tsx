@@ -15,12 +15,16 @@ import { AdvancedModeToggle } from '@/components/create/AdvancedModeToggle';
 import { StructuralFeedback } from '@/components/create/StructuralFeedback';
 import { RegeneratePrompt } from '@/components/create/RegeneratePrompt';
 import { VoxelPreview } from '@/components/create/VoxelPreview';
+import { GenerationModeToggle } from '@/components/create/GenerationModeToggle';
+import { SizeSelector } from '@/components/create/SizeSelector';
+import { SymmetrySelector } from '@/components/create/SymmetrySelector';
 import { ModelViewer } from '@/components/viewer/ModelViewer';
 import { cn } from '@/lib/utils';
 import { MAX_RETRIES } from '@/lib/constants';
 import { STABILITY_REGENERATION_SUFFIX } from '@/lib/ai/prompts';
 import { detectCategory } from '@/lib/ai/categories';
-import type { AIModel } from '@/lib/ai/types';
+import { SIZE_PRESETS, DEFAULT_SIZE_PRESET, type SizePreset, type ResolutionConfig } from '@/lib/lego/resolution-config';
+import type { AIModel, GenerationMode, SymmetryAxis } from '@/lib/ai/types';
 
 /** Complex categories that benefit from the Pro model */
 const COMPLEX_CATEGORIES = ['vehicles', 'buildings', 'animals', 'characters'];
@@ -54,6 +58,16 @@ export function CreateContent() {
 
     // Controls visibility of structural feedback (Story 2.6)
     const [showStructuralFeedback, setShowStructuralFeedback] = useState(true);
+
+    // Generation mode for image pipeline (standard vs silhouette)
+    const [generationMode, setGenerationMode] = useState<GenerationMode>('standard');
+
+    // Size preset for silhouette mode
+    const [sizePreset, setSizePreset] = useState<SizePreset | 'custom'>(DEFAULT_SIZE_PRESET);
+    const [resolutionConfig, setResolutionConfig] = useState<ResolutionConfig>(SIZE_PRESETS[DEFAULT_SIZE_PRESET].config);
+
+    // Symmetry axis for silhouette mode (advanced option)
+    const [symmetryAxis, setSymmetryAxis] = useState<SymmetryAxis>('auto');
 
     // Text-to-model generation state
     const textGeneration = useTextToModel();
@@ -94,6 +108,7 @@ export function CreateContent() {
         isRetryExhausted: standardRetryExhausted,
         retry: standardRetry,
         structuralAnalysis: standardStructuralAnalysis,
+        brickCount: standardBrickCount,
     } = activeGeneration || {
         status: 'idle' as const,
         phase: null,
@@ -106,6 +121,7 @@ export function CreateContent() {
         isRetryExhausted: false,
         retry: () => { },
         structuralAnalysis: null,
+        brickCount: null,
     };
 
     // Unified state for all modes
@@ -115,6 +131,9 @@ export function CreateContent() {
     const error = mode === 'text-to-voxel' ? voxelGeneration.error : standardError;
     const duration = mode === 'text-to-voxel' ? voxelGeneration.duration : standardDuration;
     const structuralAnalysis = mode === 'text-to-voxel' ? voxelGeneration.structuralAnalysis : standardStructuralAnalysis;
+
+    // Brick count - only available for image mode with silhouette
+    const brickCount = mode === 'image' ? standardBrickCount : null;
 
     const reset = mode === 'text-to-voxel' ? voxelGeneration.reset : standardReset;
     const retryCount = mode === 'text-to-voxel' ? voxelGeneration.legoRetryCount : standardRetryCount;
@@ -198,7 +217,15 @@ export function CreateContent() {
      */
     const handleImageSelect = async (file: File) => {
         setShowStructuralFeedback(true); // Reset feedback visibility for new generation
-        await imageGeneration.generate(file, isFirstBuildMode, undefined, selectedModel);
+        await imageGeneration.generate(
+            file,
+            isFirstBuildMode,
+            undefined,
+            selectedModel,
+            generationMode,
+            generationMode === 'silhouette' ? resolutionConfig : undefined,
+            generationMode === 'silhouette' ? symmetryAxis : undefined
+        );
     };
 
     /**
@@ -433,6 +460,28 @@ export function CreateContent() {
                     <h2 id="upload-section" className="sr-only">
                         Upload an image
                     </h2>
+                    <div className="mb-4 flex flex-col items-center gap-4">
+                        <GenerationModeToggle
+                            mode={generationMode}
+                            onModeChange={setGenerationMode}
+                        />
+                        {/* Advanced options - only shown in silhouette mode */}
+                        {generationMode === 'silhouette' && (
+                            <div className="flex flex-wrap justify-center gap-4">
+                                <SizeSelector
+                                    value={sizePreset}
+                                    onChange={(preset, config) => {
+                                        setSizePreset(preset);
+                                        setResolutionConfig(config);
+                                    }}
+                                />
+                                <SymmetrySelector
+                                    value={symmetryAxis}
+                                    onChange={setSymmetryAxis}
+                                />
+                            </div>
+                        )}
+                    </div>
                     <ImageUpload
                         onImageSelect={handleImageSelect}
                         isLoading={isGenerating}
@@ -533,17 +582,25 @@ export function CreateContent() {
                         Your generated model
                     </h2>
 
-                    {/* Duration badge */}
-                    {duration !== null && (
-                        <div className="flex justify-center">
+                    {/* Duration and brick count badges */}
+                    <div className="flex justify-center gap-2 flex-wrap">
+                        {duration !== null && (
                             <span
                                 className="text-sm text-muted-foreground bg-muted px-3 py-1 rounded-full"
                                 data-testid="duration-badge"
                             >
                                 Generated in {(duration / 1000).toFixed(1)}s
                             </span>
-                        </div>
-                    )}
+                        )}
+                        {brickCount !== null && (
+                            <span
+                                className="text-sm text-green-700 bg-green-100 px-3 py-1 rounded-full font-medium"
+                                data-testid="brick-count-badge"
+                            >
+                                🧱 {brickCount} bricks
+                            </span>
+                        )}
+                    </div>
 
                     {/* Structural Feedback Alert (Story 2.6) */}
                     {showStructuralFeedback && structuralAnalysis && (

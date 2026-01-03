@@ -59,9 +59,69 @@ function addBrick(w,d,x,y,z,color){
 {{BRICKS}}
 // --- BRICKS END ---
 
-window.addEventListener('message',(e)=>{const d=e.data;if(!d||!d.type)return;if(d.type==='rotate'){const o=new THREE.Vector3().copy(camera.position).sub(controls.target);const a=Math.PI/8;o.applyAxisAngle(new THREE.Vector3(0,1,0),d.direction==='left'?a:-a);camera.position.copy(controls.target).add(o)}else if(d.type==='zoom'){camera.position.multiplyScalar(d.direction==='in'?0.8:1.25)}else if(d.type==='reset'){controls.reset();camera.position.set(20,20,20);camera.lookAt(0,0,0)}controls.update()});
+// Auto-frame camera to fit model
+(function autoFrameCamera() {
+  const box = new THREE.Box3();
+  scene.traverse((obj) => {
+    if (obj.isMesh && obj.geometry) {
+      box.expandByObject(obj);
+    }
+  });
+  
+  if (!box.isEmpty()) {
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    cameraZ *= 1.8; // Add padding
+    
+    camera.position.set(center.x + cameraZ * 0.7, center.y + cameraZ * 0.5, center.z + cameraZ * 0.7);
+    camera.lookAt(center);
+    controls.target.copy(center);
+    controls.update();
+  }
+})();
+
+// Handle control messages from parent
+function centerCamera() {
+  const box = new THREE.Box3();
+  scene.traverse((obj) => {
+    if (obj.isMesh && obj.geometry) box.expandByObject(obj);
+  });
+  if (!box.isEmpty()) {
+    const c = box.getCenter(new THREE.Vector3());
+    const s = box.getSize(new THREE.Vector3());
+    const m = Math.max(s.x, s.y, s.z);
+    const z = m * 1.8;
+    camera.position.set(c.x + z * 0.7, c.y + z * 0.5, c.z + z * 0.7);
+    camera.lookAt(c);
+    controls.target.copy(c);
+  }
+  controls.update();
+}
+
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (!d || !d.type) return;
+  
+  if (d.type === 'rotate') {
+    const o = new THREE.Vector3().copy(camera.position).sub(controls.target);
+    const a = Math.PI / 8;
+    o.applyAxisAngle(new THREE.Vector3(0, 1, 0), d.direction === 'left' ? a : -a);
+    camera.position.copy(controls.target).add(o);
+  } else if (d.type === 'zoom') {
+    camera.position.multiplyScalar(d.direction === 'in' ? 0.8 : 1.25);
+  } else if (d.type === 'reset' || d.type === 'center') {
+    controls.reset();
+    centerCamera();
+  }
+  controls.update();
+});
+
 window.parent.postMessage({type:'ready'},'*');
 function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}animate();
+
 window.addEventListener('resize',()=>{camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight)});
 </script>
 </body>
@@ -71,58 +131,58 @@ window.addEventListener('resize',()=>{camera.aspect=window.innerWidth/window.inn
  * Generate complete HTML from brick array
  */
 export function generateHTMLFromBricks(bricks: LegoBrick[]): string {
-    const brickCalls = bricks
-        .map(brick => {
-            const { width, depth, x, y, z, color } = brick;
-            return `addBrick(${width},${depth},${x},${y},${z},${color});`;
-        })
-        .join('\n');
+  const brickCalls = bricks
+    .map(brick => {
+      const { width, depth, x, y, z, color } = brick;
+      return `addBrick(${width},${depth},${x},${y},${z},${color});`;
+    })
+    .join('\n');
 
-    return HTML_TEMPLATE.replace('{{BRICKS}}', brickCalls);
+  return HTML_TEMPLATE.replace('{{BRICKS}}', brickCalls);
 }
 
 /**
  * Parse voxel JSON from LLM response
  */
 export interface VoxelGridJSON {
-    dimensions?: { x: number; y: number; z: number };
-    voxels: Array<{ x: number; y: number; z: number; color: string }>;
+  dimensions?: { x: number; y: number; z: number };
+  voxels: Array<{ x: number; y: number; z: number; color: string }>;
 }
 
 /**
  * Parse and validate voxel JSON
  */
 export function parseVoxelJSON(jsonString: string): VoxelGridJSON | null {
-    try {
-        // Try to extract JSON from markdown code blocks
-        let cleaned = jsonString.trim();
+  try {
+    // Try to extract JSON from markdown code blocks
+    let cleaned = jsonString.trim();
 
-        // Remove markdown code fences
-        cleaned = cleaned.replace(/^```json\s*/i, '').replace(/```\s*$/, '');
-        cleaned = cleaned.replace(/^```\s*/, '').replace(/```\s*$/, '');
+    // Remove markdown code fences
+    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/```\s*$/, '');
+    cleaned = cleaned.replace(/^```\s*/, '').replace(/```\s*$/, '');
 
-        const parsed = JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned);
 
-        // Validate structure
-        if (!parsed.voxels || !Array.isArray(parsed.voxels)) {
-            console.error('[parseVoxelJSON] Missing or invalid voxels array');
-            return null;
-        }
-
-        // Validate voxels
-        for (const voxel of parsed.voxels) {
-            if (typeof voxel.x !== 'number' ||
-                typeof voxel.y !== 'number' ||
-                typeof voxel.z !== 'number' ||
-                typeof voxel.color !== 'string') {
-                console.error('[parseVoxelJSON] Invalid voxel format:', voxel);
-                return null;
-            }
-        }
-
-        return parsed;
-    } catch (error) {
-        console.error('[parseVoxelJSON] Failed to parse:', error);
-        return null;
+    // Validate structure
+    if (!parsed.voxels || !Array.isArray(parsed.voxels)) {
+      console.error('[parseVoxelJSON] Missing or invalid voxels array');
+      return null;
     }
+
+    // Validate voxels
+    for (const voxel of parsed.voxels) {
+      if (typeof voxel.x !== 'number' ||
+        typeof voxel.y !== 'number' ||
+        typeof voxel.z !== 'number' ||
+        typeof voxel.color !== 'string') {
+        console.error('[parseVoxelJSON] Invalid voxel format:', voxel);
+        return null;
+      }
+    }
+
+    return parsed;
+  } catch (error) {
+    console.error('[parseVoxelJSON] Failed to parse:', error);
+    return null;
+  }
 }

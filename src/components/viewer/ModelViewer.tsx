@@ -30,6 +30,19 @@ export function ModelViewer({
         setHasMounted(true);
     }, []);
 
+    // Fallback timeout: if 'ready' signal not received within 3 seconds, force ready state
+    useEffect(() => {
+        if (state === 'loading' && hasMounted && htmlScene) {
+            const timeout = setTimeout(() => {
+                console.log('[ModelViewer] Fallback timeout - forcing ready state');
+                setState('ready');
+                onLoad?.();
+            }, 3000);
+
+            return () => clearTimeout(timeout);
+        }
+    }, [state, hasMounted, htmlScene, onLoad]);
+
     // Communicate with iframe
     const handleControlMessage = useCallback((action: ControlAction) => {
         if (iframeRef.current?.contentWindow) {
@@ -50,6 +63,7 @@ export function ModelViewer({
             }
 
             if (event.data?.type === 'ready') {
+                console.log('[ModelViewer] Received ready signal from iframe');
                 setState('ready');
                 onLoad?.();
             }
@@ -62,6 +76,7 @@ export function ModelViewer({
     const handleLoad = useCallback(() => {
         // We still keep the iframe's onLoad as a backup for the skeleton removal
         // but prefer the 'ready' signal from the Three.js scene for "Interactive" state
+        console.log('[ModelViewer] Iframe onLoad fired, current state:', state);
         if (state === 'loading') {
             setState('ready');
             onLoad?.();
@@ -85,13 +100,15 @@ export function ModelViewer({
             data-testid="model-viewer"
         >
             <div className="relative w-full aspect-video bg-muted rounded-lg overflow-hidden border border-border">
-                {/* Always show skeleton if not mounted or loading */}
+                {/* Show semi-transparent loading indicator */}
                 {(!hasMounted || state === 'loading') && (
                     <div
-                        className="absolute inset-0 animate-pulse bg-muted z-10"
+                        className="absolute inset-0 flex items-center justify-center bg-muted/50"
                         data-testid="viewer-skeleton"
                         aria-label="Loading 3D model..."
-                    />
+                    >
+                        <span className="text-sm text-muted-foreground animate-pulse">Loading 3D scene...</span>
+                    </div>
                 )}
 
                 {state === 'error' ? (
@@ -106,10 +123,7 @@ export function ModelViewer({
                             ref={iframeRef}
                             title="3D Lego Model Viewer"
                             srcDoc={htmlScene}
-                            className={cn(
-                                'w-full h-full border-0',
-                                state === 'loading' && 'invisible'
-                            )}
+                            className="w-full h-full border-0"
                             onLoad={handleLoad}
                             onError={handleError}
                             sandbox="allow-scripts allow-same-origin"

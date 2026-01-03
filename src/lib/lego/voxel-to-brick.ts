@@ -68,17 +68,26 @@ export function convertVoxelsToBricks(voxels: Voxel[]): LegoBrick[] {
     }
 
     // Build upper layers with interlocking
+    // Track bricks from the previous layer for seam detection
+    let previousLayerBricks: LegoBrick[] = bricks.filter(b => b.y === 1);
+    if (previousLayerBricks.length === 0) {
+        previousLayerBricks = bricks.filter(b => b.y === 0);
+    }
+
     for (let y = 2; y <= dims.y; y++) {
         if (!layers.has(y)) continue;
 
-        const previousBricks = bricks.filter(b => b.y === y - 1);
+        // Use interlocking algorithm to cross seams from previous layer
         const layerBricks = fillLayerWithInterlocking(
             layers.get(y)!,
             y,
-            previousBricks,
+            previousLayerBricks,
             voxelSet
         );
         bricks.push(...layerBricks);
+
+        // Update previous layer for next iteration
+        previousLayerBricks = layerBricks;
     }
 
     return bricks;
@@ -94,27 +103,33 @@ function buildSolidBase(
 ): LegoBrick[] {
     const bricks: LegoBrick[] = [];
 
-    // Layer 0: Fill with aligned pattern
-    const base0 = fillLayerAligned(layer0, 0, voxelSet);
-    bricks.push(...base0);
+    // Process Y=0 - simple placement for ground layer
+    let base0Bricks: LegoBrick[] = [];
+    if (layer0.size > 0) {
+        base0Bricks = fillLayerSimple(layer0, 0);
+        bricks.push(...base0Bricks);
+    }
 
-    // Layer 1: Fill with offset pattern to bridge seams
+    // Process Y=1 - use interlocking to cross Y=0 seams
     if (layer1.size > 0) {
-        const base1 = fillLayerWithInterlocking(layer1, 1, base0, voxelSet);
-        bricks.push(...base1);
+        if (base0Bricks.length > 0) {
+            // Use interlocking with Y=0 bricks
+            const base1 = fillLayerWithInterlocking(layer1, 1, base0Bricks, voxelSet);
+            bricks.push(...base1);
+        } else {
+            // No Y=0 layer, use simple placement
+            const base1 = fillLayerSimple(layer1, 1);
+            bricks.push(...base1);
+        }
     }
 
     return bricks;
 }
 
 /**
- * Fill layer with aligned bricks (for base)
+ * Fill layer with simple brick placement (no interlocking or voxel alignment)
  */
-function fillLayerAligned(
-    grid: OccupancyGrid,
-    y: number,
-    voxelSet: Set<string>
-): LegoBrick[] {
+function fillLayerSimple(grid: OccupancyGrid, y: number): LegoBrick[] {
     const bricks: LegoBrick[] = [];
     const used = new Set<string>();
 
@@ -124,41 +139,25 @@ function fillLayerAligned(
         if (used.has(pos.key)) continue;
 
         const color = grid.get(pos.key)!;
-
-        // Try with voxel-alignment first
         let placed = false;
 
-        // Try 2x4 horizontal (voxel-aligned)
-        if (canPlaceBrickVoxelAligned(grid, used, pos.x, pos.z, 2, 4, color, y, voxelSet)) {
+        // Try 2x4 horizontal
+        if (canPlaceBrick(grid, used, pos.x, pos.z, 2, 4, color)) {
             bricks.push({ width: 2, depth: 4, x: pos.x, y, z: pos.z, color });
             markUsed(used, pos.x, pos.z, 2, 4);
             placed = true;
         }
-        // Try 2x4 vertical (voxel-aligned)
-        else if (canPlaceBrickVoxelAligned(grid, used, pos.x, pos.z, 4, 2, color, y, voxelSet)) {
+        // Try 2x4 vertical
+        else if (canPlaceBrick(grid, used, pos.x, pos.z, 4, 2, color)) {
             bricks.push({ width: 4, depth: 2, x: pos.x, y, z: pos.z, color });
             markUsed(used, pos.x, pos.z, 4, 2);
             placed = true;
         }
-        // Try 2x2 (voxel-aligned)
-        else if (canPlaceBrickVoxelAligned(grid, used, pos.x, pos.z, 2, 2, color, y, voxelSet)) {
+        // Try 2x2
+        else if (canPlaceBrick(grid, used, pos.x, pos.z, 2, 2, color)) {
             bricks.push({ width: 2, depth: 2, x: pos.x, y, z: pos.z, color });
             markUsed(used, pos.x, pos.z, 2, 2);
             placed = true;
-        }
-
-        // Fallback: Try without voxel constraint if strict version failed
-        if (!placed) {
-            if (canPlaceBrick(grid, used, pos.x, pos.z, 2, 4, color)) {
-                bricks.push({ width: 2, depth: 4, x: pos.x, y, z: pos.z, color });
-                markUsed(used, pos.x, pos.z, 2, 4);
-            } else if (canPlaceBrick(grid, used, pos.x, pos.z, 4, 2, color)) {
-                bricks.push({ width: 4, depth: 2, x: pos.x, y, z: pos.z, color });
-                markUsed(used, pos.x, pos.z, 4, 2);
-            } else if (canPlaceBrick(grid, used, pos.x, pos.z, 2, 2, color)) {
-                bricks.push({ width: 2, depth: 2, x: pos.x, y, z: pos.z, color });
-                markUsed(used, pos.x, pos.z, 2, 2);
-            }
         }
     }
 

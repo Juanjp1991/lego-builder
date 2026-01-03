@@ -53,4 +53,5 @@ export interface ViewerControlsProps {
 export type ControlAction =
     | { type: 'rotate'; direction: 'left' | 'right' | 'up' | 'down' }
     | { type: 'zoom'; direction: 'in' | 'out' }
-    | { type: 'reset' };
+    | { type: 'reset' }
+    | { type: 'center' };

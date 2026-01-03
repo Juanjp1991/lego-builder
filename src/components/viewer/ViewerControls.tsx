@@ -127,6 +127,8 @@ export function ViewerControls({
             case '_': action = { type: 'zoom', direction: 'out' }; break;
             case 'r':
             case 'R': action = { type: 'reset' }; break;
+            case 'c':
+            case 'C': action = { type: 'center' }; break;
             default: return;
         }
 
@@ -207,15 +209,27 @@ export function ViewerControls({
                     </button>
                 </div>
 
-                {/* Reset button */}
-                <button
-                    onClick={() => onControlMessage({ type: 'reset' })}
-                    className="p-2 min-h-[44px] min-w-[44px] rounded-md bg-accent text-accent-foreground hover:opacity-90 focus:ring-2 focus:ring-primary transition-colors"
-                    aria-label="Reset view"
-                    type="button"
-                >
-                    <span className="text-xl" aria-hidden="true">↺</span>
-                </button>
+                {/* Reset and Center buttons */}
+                <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
+                    <button
+                        onClick={() => onControlMessage({ type: 'center' })}
+                        className="p-2 min-h-[44px] px-3 rounded-md bg-primary text-primary-foreground hover:opacity-90 focus:ring-2 focus:ring-primary transition-colors font-medium text-sm"
+                        aria-label="Center model"
+                        type="button"
+                        title="Center camera on model"
+                    >
+                        ⊙ Center
+                    </button>
+                    <button
+                        onClick={() => onControlMessage({ type: 'reset' })}
+                        className="p-2 min-h-[44px] min-w-[44px] rounded-md hover:bg-muted focus:ring-2 focus:ring-primary transition-colors"
+                        aria-label="Reset view"
+                        type="button"
+                        title="Reset camera to default view"
+                    >
+                        <span className="text-xl" aria-hidden="true">↺</span>
+                    </button>
+                </div>
             </div>
 
             <p className="text-xs text-center text-muted-foreground hidden sm:block">

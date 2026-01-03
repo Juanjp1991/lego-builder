@@ -117,63 +117,8 @@ export async function POST(req: Request): Promise<Response> {
     // Log detected category for analytics/debugging
     console.log(`[generate] Detected category: ${category}`);
 
-    // Generate with hybrid algorithm for pro-3 with image
-    if (model === 'pro-3' && imageData) {
-      console.log('[generate] Using hybrid voxel-to-brick algorithm');
-
-      // Import algorithm functions
-      const { convertVoxelsToBricks } = await import('@/lib/lego/voxel-to-brick');
-      const { generateHTMLFromBricks, parseVoxelJSON } = await import('@/lib/lego/brick-to-html');
-
-      // Step 1: Get JSON voxel grid from Gemini 3.0
-      const jsonResponse = await generateContentStreamV3(trimmedPrompt, systemPrompt, imageData, mimeType);
-
-      // Read entire JSON stream
-      const reader = jsonResponse.getReader();
-      const decoder = new TextDecoder();
-      let jsonString = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        jsonString += decoder.decode(value, { stream: true });
-      }
-      jsonString += decoder.decode();
-
-      console.log('[generate] Received JSON (length):', jsonString.length);
-
-      // Step 2: Parse JSON to voxels
-      const voxelData = parseVoxelJSON(jsonString);
-      if (!voxelData || !voxelData.voxels || voxelData.voxels.length === 0) {
-        console.error('[generate] Parsing failed');
-        throw new Error('Could not parse voxel data');
-      }
-
-      console.log(`[generate] Parsed ${voxelData.voxels.length} voxels`);
-
-      // Step 3: Convert voxels to bricks
-      const bricks = convertVoxelsToBricks(voxelData.voxels);
-      console.log(`[generate] Generated ${bricks.length} bricks`);
-
-      // Step 4: Generate HTML
-      const html = generateHTMLFromBricks(bricks);
-
-      // Return as stream
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode(html));
-          controller.close();
-        }
-      });
-
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'X-Vercel-AI-Data-Stream': 'v1'
-        }
-      });
-    } else if (model === 'pro-3') {
+    // Use direct generation for all pro-3 (hybrid algorithm disabled for stability)
+    if (model === 'pro-3') {
       const stream = await generateContentStreamV3(trimmedPrompt, systemPrompt, imageData, mimeType);
       return new Response(stream, {
         headers: {
@@ -181,8 +126,7 @@ export async function POST(req: Request): Promise<Response> {
           'X-Vercel-AI-Data-Stream': 'v1'
         }
       });
-    } else {
-      // Use Vercel AI SDK for other models
+    } else {  // Use Vercel AI SDK for other models
       const models: Record<string, typeof geminiFlash> = {
         flash: geminiFlash,
         'flash-image': geminiFlashImage,

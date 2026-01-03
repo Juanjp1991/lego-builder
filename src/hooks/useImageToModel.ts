@@ -8,7 +8,8 @@ import {
     extractCleanHtml,
 } from '@/lib/ai/parse-structural-analysis';
 import type { StructuralAnalysisResult } from '@/lib/ai/structural-analysis';
-import type { AIModel } from '@/lib/ai/types';
+import type { AIModel, GenerationMode, SymmetryAxis } from '@/lib/ai/types';
+import type { ResolutionConfig } from '@/lib/lego/resolution-config';
 
 /**
  * Generation status state machine
@@ -54,7 +55,7 @@ export interface UseImageToModelReturn {
     /** Error code for programmatic handling */
     errorCode: string | null;
     /** Start generation from image file */
-    generate: (file: File, isFirstBuild?: boolean, prompt?: string, model?: AIModel) => Promise<void>;
+    generate: (file: File, isFirstBuild?: boolean, prompt?: string, model?: AIModel, generationMode?: GenerationMode, resolutionConfig?: ResolutionConfig, symmetryAxis?: SymmetryAxis) => Promise<void>;
     /** Reset to idle state (clears retry count) */
     reset: () => void;
     /** Generation duration in ms (for NFR1 tracking) */
@@ -69,6 +70,8 @@ export interface UseImageToModelReturn {
     retry: (prompt?: string) => void;
     /** Structural analysis result from AI (Story 2.6) */
     structuralAnalysis: StructuralAnalysisResult | null;
+    /** Number of LEGO bricks generated (for debugging) */
+    brickCount: number | null;
 }
 
 /**
@@ -120,6 +123,7 @@ export function useImageToModel(): UseImageToModelReturn {
     const [duration, setDuration] = useState<number | null>(null);
     const [retryCount, setRetryCount] = useState(0);
     const [structuralAnalysis, setStructuralAnalysis] = useState<StructuralAnalysisResult | null>(null);
+    const [brickCount, setBrickCount] = useState<number | null>(null);
 
     // Refs for cleanup
     const phaseTimersRef = useRef<NodeJS.Timeout[]>([]);
@@ -127,8 +131,11 @@ export function useImageToModel(): UseImageToModelReturn {
     const startTimeRef = useRef<number | null>(null);
     // Store last file data and first-build state for retry capability
     const lastFileDataRef = useRef<{ file: File; base64: string; mimeType: string } | null>(null);
+    const lastGenerationModeRef = useRef<GenerationMode>('standard');
     const lastIsFirstBuildRef = useRef<boolean>(false);
     const lastModelRef = useRef<AIModel>('flash');
+    const lastSymmetryAxisRef = useRef<SymmetryAxis>('auto');
+    const lastResolutionConfigRef = useRef<ResolutionConfig | undefined>(undefined);
 
     /**
      * Cleanup on unmount - abort any pending requests and clear timers
@@ -187,7 +194,7 @@ export function useImageToModel(): UseImageToModelReturn {
     /**
      * Internal generate function that handles both new files and retries
      */
-    const generateInternal = useCallback(async (file: File, isFirstBuild: boolean, isRetry: boolean, customPrompt?: string, model: AIModel = 'flash'): Promise<void> => {
+    const generateInternal = useCallback(async (file: File, isFirstBuild: boolean, isRetry: boolean, customPrompt?: string, model: AIModel = 'flash', generationMode: GenerationMode = 'standard', resolutionConfig?: ResolutionConfig, symmetryAxis: SymmetryAxis = 'auto'): Promise<void> => {
         // Cancel any in-progress generation
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -228,9 +235,20 @@ export function useImageToModel(): UseImageToModelReturn {
                 lastFileDataRef.current = { file, base64: imageData, mimeType };
                 lastIsFirstBuildRef.current = isFirstBuild;
                 lastModelRef.current = model;
+                lastGenerationModeRef.current = generationMode;
+                lastSymmetryAxisRef.current = symmetryAxis;
+                lastResolutionConfigRef.current = resolutionConfig;
             }
 
-            const response = await fetch('/api/generate', {
+            // Choose API endpoint based on generation mode
+            const effectiveMode = isRetry ? lastGenerationModeRef.current : generationMode;
+            const apiEndpoint = effectiveMode === 'silhouette' ? '/api/generate-silhouette' : '/api/generate';
+
+            // Get effective values for retry vs new generation
+            const effectiveSymmetryAxis = isRetry ? lastSymmetryAxisRef.current : symmetryAxis;
+            const effectiveResolutionConfig = isRetry ? lastResolutionConfigRef.current : resolutionConfig;
+
+            const response = await fetch(apiEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -239,6 +257,8 @@ export function useImageToModel(): UseImageToModelReturn {
                     mimeType,
                     isFirstBuild,
                     model: isRetry ? lastModelRef.current : model,
+                    ...(effectiveMode === 'silhouette' && effectiveResolutionConfig ? { resolutionConfig: effectiveResolutionConfig } : {}),
+                    ...(effectiveMode === 'silhouette' ? { symmetryAxis: effectiveSymmetryAxis } : {}),
                 }),
                 signal: abortControllerRef.current.signal,
             });
@@ -246,6 +266,14 @@ export function useImageToModel(): UseImageToModelReturn {
             if (!response.ok) {
                 const { code, message } = await parseError(response);
                 throw new Error(message, { cause: code });
+            }
+
+            // Capture brick count from headers (silhouette mode only)
+            const brickCountHeader = response.headers.get('X-Brick-Count');
+            if (brickCountHeader) {
+                setBrickCount(parseInt(brickCountHeader, 10));
+            } else {
+                setBrickCount(null);
             }
 
             // Read streaming response
@@ -322,9 +350,12 @@ export function useImageToModel(): UseImageToModelReturn {
      * @param isFirstBuild - Whether to use simple mode (First-Build Guarantee)
      * @param prompt - Optional custom prompt
      * @param model - Which AI model to use (flash or pro)
+     * @param generationMode - Pipeline to use (standard or silhouette)
+     * @param resolutionConfig - Size configuration for silhouette mode
+     * @param symmetryAxis - Which axis to mirror (auto, x, z, both, none)
      */
-    const generate = useCallback(async (file: File, isFirstBuild: boolean = false, prompt?: string, model: AIModel = 'flash'): Promise<void> => {
-        await generateInternal(file, isFirstBuild, false, prompt, model);
+    const generate = useCallback(async (file: File, isFirstBuild: boolean = false, prompt?: string, model: AIModel = 'flash', generationMode: GenerationMode = 'standard', resolutionConfig?: ResolutionConfig, symmetryAxis: SymmetryAxis = 'auto'): Promise<void> => {
+        await generateInternal(file, isFirstBuild, false, prompt, model, generationMode, resolutionConfig, symmetryAxis);
     }, [generateInternal]);
 
     /**
@@ -355,6 +386,7 @@ export function useImageToModel(): UseImageToModelReturn {
         setDuration(null);
         setRetryCount(0);
         setStructuralAnalysis(null);
+        setBrickCount(null);
         startTimeRef.current = null;
         lastFileDataRef.current = null;
     }, [clearPhaseTimers]);
@@ -377,5 +409,6 @@ export function useImageToModel(): UseImageToModelReturn {
         isRetryExhausted,
         retry,
         structuralAnalysis,
+        brickCount,
     };
 }
