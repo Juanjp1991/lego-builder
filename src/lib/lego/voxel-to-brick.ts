@@ -505,8 +505,10 @@ function removeFloatingBricks(bricks: LegoBrick[]): LegoBrick[] {
     const stableBricks = bricks.filter((_, i) => connected.has(i));
 
     const removedCount = bricks.length - stableBricks.length;
-    if (removedCount > 0) {
-        console.log(`[voxel-to-brick] Removed ${removedCount} floating bricks`);
+    if (removedCount > 0 || groundBricks.length === 0) {
+        const minY = Math.min(...bricks.map(b => b.y));
+        const maxY = Math.max(...bricks.map(b => b.y));
+        console.log(`[voxel-to-brick] Connectivity check: groundBricks=${groundBricks.length}, minY=${minY}, maxY=${maxY}, removed=${removedCount}`);
     }
 
     return stableBricks;

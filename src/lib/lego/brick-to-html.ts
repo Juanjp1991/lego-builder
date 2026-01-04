@@ -128,13 +128,50 @@ window.addEventListener('resize',()=>{camera.aspect=window.innerWidth/window.inn
 </html>`;
 
 /**
+ * LEGO color name to hex value mapping
+ */
+const LEGO_COLOR_HEX: Record<string, string> = {
+  red: '0xC91A09',
+  blue: '0x0055BF',
+  yellow: '0xF2CD37',
+  green: '0x237841',
+  white: '0xFFFFFF',
+  black: '0x1B2A34',
+  gray: '0x9BA19D',
+  'light-gray': '0xA0A5A9',
+  'dark-gray': '0x6D6E5C',
+  orange: '0xFE8A18',
+  brown: '0x583927',
+  tan: '0xE4CD9E',
+  pink: '0xFC97AC',
+  purple: '0x671F81',
+  lime: '0xBBE90B',
+  cyan: '0x0AAAA4',
+  'dark-blue': '0x0A3463',
+  'dark-red': '0x720E0F',
+  'dark-green': '0x184632',
+};
+
+/**
+ * Convert color name to hex, with fallback
+ */
+function colorToHex(color: string): string {
+  // If already hex format, return as-is
+  if (color.startsWith('0x') || color.startsWith('#')) {
+    return color.startsWith('#') ? `0x${color.slice(1)}` : color;
+  }
+  return LEGO_COLOR_HEX[color.toLowerCase()] || '0xF2CD37'; // Default to yellow
+}
+
+/**
  * Generate complete HTML from brick array
  */
 export function generateHTMLFromBricks(bricks: LegoBrick[]): string {
   const brickCalls = bricks
     .map(brick => {
       const { width, depth, x, y, z, color } = brick;
-      return `addBrick(${width},${depth},${x},${y},${z},${color});`;
+      const hexColor = colorToHex(color);
+      return `addBrick(${width},${depth},${x},${y},${z},${hexColor});`;
     })
     .join('\n');
 

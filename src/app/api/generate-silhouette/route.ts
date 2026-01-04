@@ -40,7 +40,7 @@ import {
 } from '@/lib/ai/prompts-silhouette';
 import type { ResolutionConfig } from '@/lib/lego/resolution-config';
 import { rasterizeLayers } from '@/lib/lego/layer-to-voxel';
-import { rasterizeMultiView, rasterizeTriView, estimateMultiViewVoxelCount, scaleMultiViewHeights } from '@/lib/lego/multi-view-voxel';
+import { rasterizeMultiView, rasterizeTriView, estimateMultiViewVoxelCount, scaleMultiViewHeights, smoothVoxelEdges } from '@/lib/lego/multi-view-voxel';
 import { convertVoxelsToBricks } from '@/lib/lego/voxel-to-brick';
 import { generateHTMLFromBricks } from '@/lib/lego/brick-to-html';
 import type { LegoColor } from '@/lib/ai/silhouette-schemas';
@@ -555,6 +555,14 @@ export async function POST(req: Request): Promise<Response> {
                 500
             );
         }
+
+        // Edge smoothing disabled - was too aggressive and creating holes
+        // TODO: Implement gentler smoothing that only removes true corner voxels
+        // const beforeSmooth = voxels.length;
+        // voxels = smoothVoxelEdges(voxels);
+        // if (voxels.length !== beforeSmooth) {
+        //     console.log('[generate-silhouette] Edge smoothing:', beforeSmooth, '->', voxels.length, 'voxels');
+        // }
 
         console.log('[generate-silhouette] Total voxels:', voxels.length);
 
