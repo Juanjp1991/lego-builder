@@ -252,16 +252,36 @@ If you detect THREE views including a TOP view, output this format:
   "top_view": {
     "width": W,
     "depth": D,
-    "cells": [{"x": X, "z": Z, "color": "..."}]
+    "rows": [{"z": Z, "x_min": X1, "x_max": X2, "color": "..."}]
   },
   "recommended_symmetry": "x"
 }
 
-TOP VIEW FORMAT:
-- "cells": Array of filled (X, Z) positions when viewing from above
-- "x": stud position (left-right)
-- "z": stud position (front-back)
-- Output all filled positions, not just the outline
+TOP VIEW FORMAT (CRITICAL FOR ACCURATE SHAPES):
+- Use "rows" format: Output ONE ROW FOR EVERY Z POSITION from the front to the back of the silhouette
+- "z": The depth position (0 = front, higher = back)
+- "x_min": Left edge of filled region at this Z
+- "x_max": Right edge of filled region at this Z
+
+CRITICAL RULES FOR TOP VIEW:
+1. Output CONSECUTIVE rows with NO GAPS (z=2, z=3, z=4, z=5, etc.)
+2. Cover the ENTIRE depth of the top silhouette from front edge to back edge
+3. For a depth-12 top view, output approximately 10-12 row entries
+4. Each row captures the X width at that Z slice
+5. For curved shapes, x_min and x_max should vary to create the curve
+
+Example for oval duck body (depth=8, viewed from above):
+"rows": [
+  {"z": 0, "x_min": 4, "x_max": 6, "color": "orange"},
+  {"z": 1, "x_min": 3, "x_max": 7, "color": "yellow"},
+  {"z": 2, "x_min": 2, "x_max": 8, "color": "yellow"},
+  {"z": 3, "x_min": 2, "x_max": 8, "color": "yellow"},
+  {"z": 4, "x_min": 2, "x_max": 8, "color": "yellow"},
+  {"z": 5, "x_min": 2, "x_max": 8, "color": "yellow"},
+  {"z": 6, "x_min": 3, "x_max": 7, "color": "yellow"},
+  {"z": 7, "x_min": 4, "x_max": 6, "color": "yellow"}
+]
+
 
 === MULTI-VIEW FORMAT (2 views: front + side) ===
 If you detect TWO views (front + side only), output this format:
@@ -331,12 +351,14 @@ EXAMPLE - Duck with front, side, and top views:
   "top_view": {
     "width": 10,
     "depth": 12,
-    "cells": [
-      {"x": 4, "z": 4, "color": "yellow"},
-      {"x": 5, "z": 5, "color": "yellow"},
-      {"x": 6, "z": 6, "color": "yellow"},
-      {"x": 5, "z": 7, "color": "yellow"},
-      {"x": 2, "z": 2, "color": "orange"}
+    "rows": [
+      {"z": 1, "x_min": 4, "x_max": 6, "color": "orange"},
+      {"z": 2, "x_min": 3, "x_max": 7, "color": "yellow"},
+      {"z": 3, "x_min": 2, "x_max": 8, "color": "yellow"},
+      {"z": 4, "x_min": 2, "x_max": 8, "color": "yellow"},
+      {"z": 5, "x_min": 2, "x_max": 8, "color": "yellow"},
+      {"z": 6, "x_min": 3, "x_max": 7, "color": "yellow"},
+      {"z": 7, "x_min": 4, "x_max": 6, "color": "yellow"}
     ]
   },
   "recommended_symmetry": "x"

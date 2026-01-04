@@ -260,7 +260,7 @@ async function generateCandidate(
                 depth: scaledModel.bounding_box.depth,
                 frontColumns: rawTriModel.front_view.columns.length,
                 sideColumns: rawTriModel.side_view.columns.length,
-                topCells: rawTriModel.top_view.cells.length,
+                topCells: rawTriModel.top_view.rows?.length || rawTriModel.top_view.cells?.length || 0,
             });
         } else if (validation.viewMode === 'multi') {
             // Multi-view model detected (front + side)
@@ -485,7 +485,7 @@ export async function POST(req: Request): Promise<Response> {
                 scaledHeight: scaledModel.bounding_box.height_plates,
                 width: scaledModel.bounding_box.width,
                 depth: scaledModel.bounding_box.depth,
-                topCells: triModel.top_view.cells.length,
+                topCells: triModel.top_view.rows?.length || triModel.top_view.cells?.length || 0,
             });
 
             // Use tri-view rasterization with all 3 views

@@ -47,12 +47,15 @@ export interface SideView {
 
 /**
  * Top view silhouette (looking at X-Z plane from above)
- * Each "row" represents filled Z positions at a given X
+ * Supports two formats:
+ * - cells: Sparse point-based (legacy)
+ * - rows: Row-span based (preferred, accurate shapes)
  */
 export interface TopView {
     width: number;        // Total width in studs (X)
     depth: number;        // Total depth in studs (Z)
-    cells: TopViewCell[]; // Filled cells in the X-Z plane
+    cells?: TopViewCell[]; // Filled cells in the X-Z plane (legacy)
+    rows?: TopViewRow[];  // Filled row spans (preferred)
 }
 
 /**
@@ -61,6 +64,16 @@ export interface TopView {
 export interface TopViewCell {
     x: number;    // X position (studs)
     z: number;    // Z position (studs)
+    color: string;
+}
+
+/**
+ * A row span in the top view (X range at a specific Z position)
+ */
+export interface TopViewRow {
+    z: number;      // Z position (depth)
+    x_min: number;  // Left edge of filled region
+    x_max: number;  // Right edge of filled region
     color: string;
 }
 
@@ -496,11 +509,102 @@ function buildFilledRangesMap(
 }
 
 /**
- * Builds a filled set of (x,z) positions from top view cells.
- * Uses convex hull filling to interpolate between sparse sample points.
+ * Applies ellipse-based corner rounding to a set of (x,z) positions.
+ * This creates smooth, curved shapes from rectangular input data.
+ * 
+ * The function inscribes an ellipse in the bounding box and removes
+ * positions that fall outside the ellipse, creating rounded corners.
+ */
+function applyEllipseRounding(
+    inputSet: Set<string>,
+    width: number,
+    depth: number
+): Set<string> {
+    if (inputSet.size === 0) return inputSet;
+
+    // Find the actual bounds of the filled input
+    let minX = Infinity, maxX = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+
+    for (const key of inputSet) {
+        const [x, z] = key.split(',').map(Number);
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minZ = Math.min(minZ, z);
+        maxZ = Math.max(maxZ, z);
+    }
+
+    const actualWidth = maxX - minX + 1;
+    const actualDepth = maxZ - minZ + 1;
+
+    // Center of the ellipse
+    const cx = (minX + maxX) / 2;
+    const cz = (minZ + maxZ) / 2;
+
+    // Semi-axes of the ellipse (slightly larger to not over-cut)
+    const a = actualWidth / 2 + 0.5;  // Semi-axis in X
+    const b = actualDepth / 2 + 0.5;  // Semi-axis in Z
+
+    // Apply ellipse mask (keep only points inside ellipse)
+    const result = new Set<string>();
+    let removed = 0;
+
+    for (const key of inputSet) {
+        const [x, z] = key.split(',').map(Number);
+
+        // Ellipse equation: (x-cx)²/a² + (z-cz)²/b² <= 1
+        const dx = x - cx;
+        const dz = z - cz;
+        const ellipseValue = (dx * dx) / (a * a) + (dz * dz) / (b * b);
+
+        if (ellipseValue <= 1.0) {
+            result.add(key);
+        } else {
+            removed++;
+        }
+    }
+
+    if (removed > 0) {
+        console.log(`[multi-view-voxel] Ellipse rounding: removed ${removed} corner positions`);
+    }
+
+    return result;
+}
+
+/**
+ * Builds a filled set of (x,z) positions from top view data.
+ * 
+ * Supports two formats:
+ * - "rows": Preferred format with accurate X spans per Z row (no filling needed)
+ * - "cells": Legacy sparse format (requires interior filling)
+ * 
+ * Additionally applies ellipse-based corner rounding to create curved shapes.
  */
 function buildFilledTopViewSet(top_view: TopView): Set<string> {
     const set = new Set<string>();
+
+    // Prefer "rows" format if available (more accurate, no filling needed)
+    if (top_view.rows && top_view.rows.length > 0) {
+        console.log(`[multi-view-voxel] Using rows format: ${top_view.rows.length} row spans`);
+
+        // First, fill from row data
+        for (const row of top_view.rows) {
+            for (let x = row.x_min; x <= row.x_max; x++) {
+                set.add(`${x},${row.z}`);
+            }
+        }
+
+        // Apply ellipse-based corner rounding for organic shapes
+        return applyEllipseRounding(set, top_view.width, top_view.depth);
+    }
+
+    // Fall back to "cells" format (legacy - requires interior filling)
+    if (!top_view.cells || top_view.cells.length === 0) {
+        console.log('[multi-view-voxel] Warning: Top view has no cells or rows');
+        return set;
+    }
+
+    console.log(`[multi-view-voxel] Using cells format: ${top_view.cells.length} cells (legacy)`);
 
     // First, add all explicit cells from AI
     for (const cell of top_view.cells) {

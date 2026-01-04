@@ -428,6 +428,7 @@ export type SideView = z.infer<typeof SideViewSchema>;
 
 /**
  * A single filled cell in the top view (X-Z plane).
+ * Used for sparse point-based top view (legacy format).
  */
 export const TopViewCellSchema = z.object({
     /** X position (studs) */
@@ -441,18 +442,45 @@ export const TopViewCellSchema = z.object({
 export type TopViewCell = z.infer<typeof TopViewCellSchema>;
 
 /**
+ * A row span in the top view (X-Z plane).
+ * Each row represents a continuous filled range at a specific Z position.
+ * This format preserves curved/irregular shapes accurately.
+ */
+export const TopViewRowSchema = z.object({
+    /** Z position (studs) - the row's depth position */
+    z: z.number().int().nonnegative(),
+    /** Minimum X position (studs) - left edge of filled region */
+    x_min: z.number().int().nonnegative(),
+    /** Maximum X position (studs) - right edge of filled region */
+    x_max: z.number().int().nonnegative(),
+    /** Color of this row span */
+    color: z.enum(LEGO_COLORS),
+});
+
+export type TopViewRow = z.infer<typeof TopViewRowSchema>;
+
+/**
  * Top view silhouette (looking at X-Z plane from above).
+ * Supports two formats:
+ * - "cells": Sparse point-based (legacy, filled by algorithm)
+ * - "rows": Row-span based (preferred, accurate shapes)
  */
 export const TopViewSchema = z.object({
     /** Total width in studs */
     width: z.number().int().positive().max(MAX_BBOX_STUDS),
     /** Total depth in studs */
     depth: z.number().int().positive().max(MAX_BBOX_STUDS),
-    /** Filled cells */
-    cells: z.array(TopViewCellSchema).min(1),
-});
+    /** Filled cells (legacy format - sparse points) */
+    cells: z.array(TopViewCellSchema).optional(),
+    /** Filled rows (preferred format - accurate spans per Z row) */
+    rows: z.array(TopViewRowSchema).optional(),
+}).refine(
+    (data) => (data.cells && data.cells.length > 0) || (data.rows && data.rows.length > 0),
+    { message: "Top view must have either cells or rows" }
+);
 
 export type TopView = z.infer<typeof TopViewSchema>;
+
 
 /**
  * Multi-view silhouette model with front and side views.
